@@ -38,6 +38,9 @@ desktop/.npm_cache/
 .playwright-mcp/
 .orig
 desktop/tool/.patch-backup/
+desktop/portable/_cache/
+desktop/portable/_stage/
+desktop/portable/_output/
 .worktrees/
 worktrees/
 .agents/worktrees/

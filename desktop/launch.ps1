@@ -105,7 +105,7 @@ if (-not ($replayScript -and (Test-Path $aiDir))) { $replayScript = '' }
 if (-not (Test-Path (Join-Path $aiDir 'dsh-host-apiproxy\lib\index.js'))) {
   Show-Fatal "Local dsh package is incomplete (dsh-host-apiproxy missing): $aiDir"
 }
-if (Test-Path $replayScript) {
+if ($replayScript -and (Test-Path $replayScript)) {
   $patchedFiles = @('dsh-host-apiproxy','dsh-llm-pi-ai','dsh-tool-fs') | Where-Object {
     $f = Join-Path (Join-Path $aiDir $_) 'lib\index.js'
     Test-Path $f -and (Select-String -Path $f -Pattern '[dsh-patch:global-image]' -SimpleMatch -Quiet -ErrorAction SilentlyContinue)

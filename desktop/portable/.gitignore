@@ -1,0 +1,7 @@
+# Portable build outputs and caches. Mirrored in the root .gitignore
+# (desktop/portable/_cache/, _stage/, _output/). Kept here so this directory
+# is self-documenting and safe if moved/renamed. Only app/,
+# build-portable.ps1, README.md, and README.txt are tracked source.
+_cache/
+_stage/
+_output/
