@@ -1,0 +1,23 @@
+{
+  "name": "dsh-desktop-tool",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Local Pake CLI installation for building the DeepSeek Harness desktop app. Not a workspace member: npm (not pnpm) installs a flat tree here.",
+  "devDependencies": {
+    "pake-cli": "3.15.6"
+  },
+  "overrides": {
+    "sharp": "0.35.3",
+    "@img/sharp-win32-x64": "0.35.3"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh": "^0.1.0-rc.6"
+  },
+  "allowScripts": {
+    "node-pty@1.1.0": true,
+    "koffi@3.1.5": true,
+    "@deepseek-ai/dsh-subprocess-local@0.1.0-rc.6": true,
+    "@google/genai": false,
+    "protobufjs": false
+  }
+}
