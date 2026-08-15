@@ -48,12 +48,19 @@ export interface Config {
   surfaceContext: boolean
   /** Explicit `--trusted-host` authorities from this invocation. */
   trustedHosts: string[]
+  /**
+   * System-level image capability: images upload regardless of the routed
+   * model's declared input modalities and are handled by an external vision
+   * tool, not the model itself. The model does not see the image content.
+   */
+  globalImage: boolean
 }
 
 export const Config: z<Config> = z.object({
   printUrl: z.boolean().default(true),
   surfaceContext: z.boolean().default(true),
   trustedHosts: z.array(String).default([]),
+  globalImage: z.boolean().default(false),
 })
 
 /** Bind-dependent Web values shared by the trust fence and URL display. */
@@ -138,6 +145,10 @@ export function apply(ctx: Context, config: Config): void {
   const runtime = resolveLanTrust(ctx.webServer.host, config.trustedHosts)
   // Release dependent rows only after bind-dependent trust has been sampled once.
   ctx.provide(WEB_RUNTIME_SERVICE, runtime)
+  // System-level image capability: the single source of truth the host-side
+  // image admission, strip, and read_image gates read. Off by default; the Web
+  // profile patch turns it on.
+  ctx.provide('globalImage', config.globalImage)
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
   if (config.surfaceContext) {
     ctx.inject(['systemPrompt'], (promptCtx) => {

@@ -124,8 +124,13 @@
     # frontend-static fallback owner, registers the web-surface prompt
     # section and the bash runtime variable, and prints the URL line. The
     # webStartup provider supplies invocation-only values; after the server
-    # binds, this row samples LAN trust once and provides `webRuntime`. A
-    # complete agent-preset persona suppresses the prompt section for that
+    # binds, this row samples LAN trust once and provides `webRuntime`. The
+    # `globalImage: true` names the system-level image capability, on for the
+    # desktop and browser surface: images upload regardless of the routed
+    # model's declared modalities and are interpreted by an external vision
+    # tool (a user-level preset), never the model. A user patch layer restores
+    # the model-declared gating by setting it to false.
+    # A complete agent-preset persona suppresses the prompt section for that
     # agent while retaining the host-owned shell variable.
     - id: web-runtime
       name: '@deepseek-ai/dsh-web-app'
@@ -133,6 +138,7 @@
       config:
         printUrl: true
         surfaceContext: true
+        globalImage: true
         trustedHosts: !!js ctx.webStartup.trustedHosts
 
     # The client-plugin reload chain, always mounted: it is idle until a
