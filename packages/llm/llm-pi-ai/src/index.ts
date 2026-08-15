@@ -201,6 +201,7 @@ export function apply(ctx: Context, config: Config): void {
     profiles,
     resolveApiKey,
     resolveAttachments: () => ctx.get('attachments'),
+    resolveGlobalImage: () => ctx.get('globalImage') === true,
   })
   // The full installed catalog is configurable from the moment the plugin
   // mounts — dormant or not — so configuration surfaces can offer every

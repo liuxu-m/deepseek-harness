@@ -39,15 +39,17 @@ import {
   ReasoningEffortId,
 } from '@deepseek-ai/dsh-llm'
 import type {
+  ContentBlock,
   GenerateOptions,
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
+  Message,
   ReasoningEffortId as ReasoningEffortIdType,
   ResolvedRetryPolicy,
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
-import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { toPiContext } from './context.ts'
@@ -76,6 +78,13 @@ export interface PiAiAdapterOptions {
   resolveApiKey: (provider: string, profile: ResolvedPiAiProviderProfile) => Promise<string | undefined>
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
+  /**
+   * Resolve whether the deployment routes images to a non-image model through
+   * an external vision tool, at request time. When true and the routed model
+   * does not declare image input, image blocks are stripped into text
+   * placeholders instead of refusing with `UNSUPPORTED_CONTENT`.
+   */
+  resolveGlobalImage?: () => boolean
 }
 
 /** Copy profile stream knobs into pi-ai's common option vocabulary. */
@@ -176,6 +185,48 @@ function requestHeaders(headers: Readonly<Record<string, string>> | undefined): 
     ...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
     ...attribution,
   }
+}
+
+/** Model-visible hint replacing a stripped tool-result inner image. */
+const STRIPPED_IMAGE_HINT = '[Image attachment; use the vision tool to view it]'
+
+/** The model-visible placeholder for a stripped direct image block, naming its attachment info JSON. */
+function strippedImagePlaceholder(attachment: ImageAttachmentRef): { type: 'text'; text: string } {
+  return {
+    type: 'text',
+    text: `[The user uploaded an image. Attachment info ${JSON.stringify(attachment)}. The current model cannot see image content; if you need to understand it, call the vision tool and pass the attachment info JSON above to the attachment_info parameter.]`,
+  }
+}
+
+/**
+ * Replace image blocks with model-visible text placeholders so a model that
+ * cannot see image content still receives the attachment info an external
+ * vision tool consumes. Direct image blocks carry the full placeholder;
+ * tool-result inner images become just the vision-tool hint.
+ * @param blocks - the content blocks of one message.
+ * @param inToolResult - whether this level sits inside a tool-result block.
+ * @returns a parallel block list with every image replaced by text.
+ */
+function stripImageBlocks(blocks: readonly ContentBlock[], inToolResult: boolean): ContentBlock[] {
+  const out: ContentBlock[] = []
+  for (const block of blocks) {
+    switch (block.type) {
+      case 'image':
+        out.push(inToolResult ? { type: 'text', text: STRIPPED_IMAGE_HINT } : strippedImagePlaceholder(block.attachment))
+        break
+      case 'tool-result':
+        out.push({ ...block, content: stripImageBlocks(block.content, true) })
+        break
+      default:
+        out.push(block)
+    }
+  }
+  return out
+}
+
+/** Strip every image block from the request messages for a non-image model. */
+function stripMessages(messages: readonly Message[]): Message[] {
+  return messages.map(message => ({ ...message, content: stripImageBlocks(message.content, false) }))
 }
 
 /**
@@ -299,17 +350,24 @@ export class PiAiAdapter extends LlmAdapter {
     using watchdog = idleWatchdog(upstream, streamIdleTimeoutMs, 'LLM_STREAM_IDLE_TIMEOUT')
 
     try {
+      const globalImage = this.config.resolveGlobalImage?.() === true
       const containsImage = options.messages.some(message => contentHasImage(message.content))
+      let effectiveMessages = options.messages
+      let attachments: AttachmentStore | undefined
       if (containsImage && !model.input.includes('image')) {
-        throw new LlmError(`pi-ai model "${model.id}" does not support image input`, 'UNSUPPORTED_CONTENT')
-      }
-      const attachments = containsImage ? this.config.resolveAttachments?.() : undefined
-      if (containsImage && attachments === undefined) {
-        throw new LlmError('pi-ai image input requires the durable attachment service', 'UNSUPPORTED_CONTENT')
+        if (!globalImage) {
+          throw new LlmError(`pi-ai model "${model.id}" does not support image input`, 'UNSUPPORTED_CONTENT')
+        }
+        effectiveMessages = stripMessages(options.messages)
+      } else if (containsImage) {
+        attachments = this.config.resolveAttachments?.()
+        if (attachments === undefined) {
+          throw new LlmError('pi-ai image input requires the durable attachment service', 'UNSUPPORTED_CONTENT')
+        }
       }
       const context = attachments === undefined
-        ? toPiContext(options)
-        : await toPiContext(options, attachments)
+        ? toPiContext({ ...options, messages: effectiveMessages })
+        : await toPiContext({ ...options, messages: effectiveMessages }, attachments)
       const events = snapshot.models.streamSimple(model, context, {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
