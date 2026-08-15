@@ -119,6 +119,32 @@ describe('globalImage prompt admission', () => {
 
     expect(result.result).toEqual({ ok: true, value: { accepted: true } })
     expect(followup).toHaveBeenCalledTimes(1)
+    // The durable image block reached the followup message: admission does not
+    // merely accept the prompt, it saves and wires the image through.
+    const message = followup.mock.calls[0]![0] as { content: readonly unknown[] }
+    expect(message.content).toContainEqual(expect.objectContaining({ type: 'image', attachment: expect.objectContaining({ attachmentId: 'att-1' }) }))
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects an image prompt when globalImage is on but the durable attachment service is absent', async () => {
+    const { ctx, sessionId } = await harness()
+    ctx.provide('globalImage', true)
+    const refused = api(ctx)
+
+    const result = await refused.sessions.prompt(request({
+      sessionId,
+      mode: 'queue' as const,
+      content: [{ ...PNG_IMAGE }],
+    }))
+
+    expect(result.result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'attachment-error',
+        message: 'Image input requires the durable attachment service.',
+        details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
+      },
+    })
     await ctx.fiber.dispose()
   })
 
