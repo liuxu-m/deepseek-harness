@@ -440,11 +440,10 @@ git commit -m "feat(web): add web-profile global image flag"
 **Files:**
 - Modify: `packages/host/apiproxy/src/api-proxy.ts`
 - Create: `packages/host/apiproxy/tests/global-image.spec.ts`
-- Modify: `packages/host/apiproxy/tests/client-handler.spec.ts` (extend the existing REAL-composition suite)
 
 - [ ] **Step 1: Write failing admission tests**
 
-The product-visible admission behavior requires a REAL-composition test (Loader-booted cordis.yml) per the packages testing policy, plus focused handler tests:
+Focused handler tests through `createApiProxy` (the established apiproxy harness; `client-handler.spec.ts` is a wire-protocol suite over a scripted impl and cannot exercise admission, and the package has no Loader-booted composition precedent). The Loader/app-process REAL-composition proof for this behavior ships in Task 13's packaged smoke (POST an image-bearing prompt against the bundled runtime and assert the admission code is not `MODEL_DOES_NOT_SUPPORT_IMAGES`).
 
 ```ts
 it('admits an image prompt when globalImage is on, without an image-capable model', async () => {
