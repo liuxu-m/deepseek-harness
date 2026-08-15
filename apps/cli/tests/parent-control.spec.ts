@@ -84,10 +84,11 @@ describe('installParentControl', () => {
 })
 
 /** Drop trailing process listeners so a test leaves no global handlers behind. */
-function trimProcessListeners(event: string, keep: number): void {
-  const listeners = process.listeners(event)
-  while (process.listenerCount(event) > keep) {
-    process.removeListener(event, listeners.pop()!)
+function trimProcessListeners(event: 'SIGTERM' | 'SIGINT' | 'unhandledRejection', keep: number): void {
+  const emitter = process as Pick<NodeJS.EventEmitter, 'listeners' | 'listenerCount' | 'removeListener'>
+  const listeners = emitter.listeners(event)
+  while (emitter.listenerCount(event) > keep) {
+    emitter.removeListener(event, listeners.pop()! as Parameters<typeof emitter.removeListener>[1])
   }
 }
 
