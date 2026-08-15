@@ -37,6 +37,7 @@ const SHIPPED_PRESET_ROOT = fileURLToPath(new URL('../config/agent-presets/', im
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { createProcessShutdown, type ProcessShutdown } from './process-shutdown.ts'
+import { installParentControl } from './parent-control.ts'
 
 const NAME = 'dsh'
 
@@ -180,6 +181,12 @@ export interface RunProfileOptions {
   patchFiles: readonly string[]
   /** The invocation's inner arguments, handed to the tree through `ctx.cmdlineArgs`. */
   args: readonly string[]
+  /**
+   * A parent shell's inherited stdin carrying the shutdown channel, when one
+   * manages this process. Passed through to {@link installParentControl}; the
+   * listener is installed before the Loader settles and disposed with the tree.
+   */
+  parentControl?: NodeJS.ReadableStream
 }
 
 /**
@@ -200,14 +207,22 @@ function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown
 
 /**
  * Boot one profile invocation end to end and leave process lifetime to the
- * mounted plugins (or to a one-shot runner the composition mounts).
- * @param options - environment snapshot, profile name, overlays, and the booted app's own arguments.
+ * mounted plugins (or to a one-shot runner the composition mounts). When
+ * `parentControl` carries a parent-shell shutdown channel, the control is
+ * installed before the Loader settles and disposed with the tree.
+ * @param options - environment snapshot, profile name, overlays, the booted app's own arguments, and an optional parent shutdown channel.
  * @returns the settled root context and the shutdown controller.
  */
 export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Context; shutdown: ProcessShutdown }> {
   const composed = composeProfile(options.profile, options.patchFiles)
   const app: { current?: Context } = {}
   const shutdown = createProcessShutdown(async () => { await app.current?.fiber.dispose() })
+  // The parent's shutdown channel listens before the tree boots, so a parent
+  // that writes its frame during startup is not lost. The listener is
+  // disposed with the tree through an effect on the hosted root context.
+  const disposeParentControl = options.parentControl === undefined
+    ? undefined
+    : installParentControl(options.parentControl, shutdown)
   const signalShutdown = new AbortController()
   const interrupt = (code: number): void => {
     signalShutdown.abort()
@@ -247,6 +262,12 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // application must not mutate the objects later reloads recompose from.
   const ctx = await boot(NAME, rootConfig, structuredClone(allPatches(composed)), (hostCtx) => {
     app.current = hostCtx
+    // Dispose the parent-control listeners with the tree: the effect's body
+    // returns the disposer, so the fiber tears it down on disposal.
+    if (disposeParentControl !== undefined) {
+      const dispose = disposeParentControl
+      hostCtx.effect(() => dispose)
+    }
     // Before any config-tree entry mounts, so plugins resolve all launch-time
     // environment values from the same immutable provenance snapshot.
     hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.environment)

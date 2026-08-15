@@ -42,6 +42,10 @@ Use `--dump-default-config` and `--dump-config` to inspect the composed tree wit
 
 The [CLI behavior reference](reference/README.md) owns exact layer precedence, flags, shutdown behavior, deployment defaults, and source execution.
 
+## Parent shutdown
+
+A parent shell can own the CLI's graceful shutdown instead of relying on signals: when launched with `DSH_PARENT_CONTROL=stdin-v1`, the CLI reads one shutdown frame from its inherited stdin and requests the same graceful drain a `SIGTERM` triggers. The Tauri desktop shell writes `{"type":"shutdown","protocol":1}\n` to the child's stdin to stop the host. A non-empty value other than `stdin-v1` fails before boot so a typo cannot silently disable desktop shutdown.
+
 ## Development
 
 Production runs require built package and frontend artifacts. From the repository root, run `pnpm run build` separately, then use `pnpm dsh <args...>` to run the TypeScript entry and forward every argument; the [source-execution reference](reference/README.md#source-execution) owns the module-resolution contract.

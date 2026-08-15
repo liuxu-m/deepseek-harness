@@ -42,6 +42,10 @@ profile 目录包含一个 `package.json`，其中记录树外插件依赖，以
 
 层的确切优先级、flag、关闭行为、部署默认值和源码执行方式，以 [CLI（命令行界面）行为参考](reference/README.md)为准。
 
+## 父进程关闭
+
+父外壳可以不依赖信号，而通过自己的通道来请求 CLI 优雅关闭：当以 `DSH_PARENT_CONTROL=stdin-v1` 启动时，CLI 会从其继承的 stdin 读取一个关闭帧，并触发与 `SIGTERM` 相同的优雅排空流程。Tauri 桌面外壳通过向子进程 stdin 写入 `{"type":"shutdown","protocol":1}\n` 来停止宿主机。非空且不等于 `stdin-v1` 的值会在启动前失败，以免拼写错误悄然禁用桌面关闭。
+
 ## 开发
 
 生产运行需要已构建的包与前端产物。请在仓库根目录单独运行 `pnpm run build`，然后使用 `pnpm dsh <args...>` 运行 TypeScript 入口并转发所有参数；模块解析约定以[源码执行参考](reference/README.md#source-execution)为准。
