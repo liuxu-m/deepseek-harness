@@ -67,7 +67,8 @@ function captureRuntimeIdentityRoute(fixture: Fixture): { route: WebRoute; dispo
   } as unknown as WebServer)
   internals.instanceId = fixture.instanceId
   internals.readVersion = () => fixture.version
-  if (fixture.homeKind !== undefined) internals.homeKind = () => fixture.homeKind
+  const { homeKind } = fixture
+  if (homeKind !== undefined) internals.homeKind = () => homeKind
   registerRuntimeIdentity(ctx)
   return {
     route: route!,
