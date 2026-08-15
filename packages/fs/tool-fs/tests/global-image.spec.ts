@@ -3,15 +3,28 @@
  * `assertImageCapableRoute`: when the flag is on, a non-image model passes as
  * long as the durable attachment service exists (an external vision tool
  * interprets the image); when the flag is off, the existing model-declaration
- * refusal is preserved.
+ * refusal is preserved. The gate contract is covered directly, and the real
+ * `ctx.tools.execute('read_image')` route is covered end to end.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
+import { CallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
+import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
+import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
+import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import { assertImageCapableRoute } from '../src/read-image.ts'
+
+/** 1x1 red PNG (valid signature, IHDR, IDAT). */
+const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64')
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -99,5 +112,72 @@ describe('assertImageCapableRoute globalImage gate', () => {
     )
     ctx.provide('attachments', ATTACHMENTS)
     await expect(assertImageCapableRoute(ctx, execOn('vision-model'), 'a.png')).resolves.toBeUndefined()
+  })
+})
+
+describe('read_image end-to-end globalImage gate', () => {
+  let dir: string
+  let home: string
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'dsh-read-image-global-'))
+    home = await mkdtemp(join(tmpdir(), 'dsh-read-image-global-home-'))
+    await writeFile(join(dir, 'red.png'), PNG_1X1)
+  })
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true })
+    await rm(home, { recursive: true, force: true })
+  })
+
+  async function toolContext(globalImage: boolean): Promise<Context> {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime, { mode: 'native' })
+    await ctx.plugin(LocalFileSystem, { cwd: dir })
+    await ctx.plugin(FsPolicy)
+    await ctx.plugin(LocalAttachmentStore, { dshHome: home })
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['visual'], new CatalogAdapter([
+      { provider: 'visual', id: 'text-model', name: 'Text', inputModalities: ['text'] },
+    ]))
+    ctx.provide('globalImage', globalImage)
+    await ctx.plugin(ToolFs)
+    return ctx
+  }
+
+  const agent = (model: string) => ({
+    options: {},
+    session: {
+      header: { cwd: dir },
+      requestHeader: () => ({ config: { provider: 'visual', model } }),
+      append: () => undefined,
+    },
+  })
+
+  let callCounter = 0
+  function readImage(ctx: Context, model: string) {
+    return ctx.tools.execute({
+      signal: new AbortController().signal,
+      callId: CallId(`img-global-${++callCounter}`),
+      name: 'read_image',
+      arguments: { file_path: 'red.png' },
+      agent: agent(model) as never,
+    })
+  }
+
+  it('lets a non-image model read through the real route when globalImage is on', async () => {
+    const ctx = await toolContext(true)
+    const result = await readImage(ctx, 'text-model')
+    expect(result.isError).toBe(false)
+    expect(result.content.some(block => block.type === 'image')).toBe(true)
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps refusing the real route for a non-image model when globalImage is off', async () => {
+    const ctx = await toolContext(false)
+    const result = await readImage(ctx, 'text-model')
+    expect(result.isError).toBe(true)
+    expect(String(result.error?.message ?? '')).toContain('does not declare image input')
+    await ctx.fiber.dispose()
   })
 })

@@ -189,12 +189,16 @@ function requestHeaders(headers: Readonly<Record<string, string>> | undefined): 
 
 /** Model-visible hint replacing a stripped tool-result inner image. */
 const STRIPPED_IMAGE_HINT = '[Image attachment; use the vision tool to view it]'
+/** Model-visible placeholder prefix for a stripped direct image block, naming its attachment info JSON. */
+const STRIPPED_IMAGE_PREFIX = '[The user uploaded an image. Attachment info '
+/** Model-visible placeholder suffix for a stripped direct image block. */
+const STRIPPED_IMAGE_SUFFIX = '. The current model cannot see image content; if you need to understand it, call the vision tool and pass the attachment info JSON above to the attachment_info parameter.]'
 
 /** The model-visible placeholder for a stripped direct image block, naming its attachment info JSON. */
 function strippedImagePlaceholder(attachment: ImageAttachmentRef): { type: 'text'; text: string } {
   return {
     type: 'text',
-    text: `[The user uploaded an image. Attachment info ${JSON.stringify(attachment)}. The current model cannot see image content; if you need to understand it, call the vision tool and pass the attachment info JSON above to the attachment_info parameter.]`,
+    text: `${STRIPPED_IMAGE_PREFIX}${JSON.stringify(attachment)}${STRIPPED_IMAGE_SUFFIX}`,
   }
 }
 

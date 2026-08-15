@@ -65,10 +65,13 @@ describe('globalImage strip path (non-image model)', () => {
 
     expect(server.requests).toHaveLength(1)
     const content = SERVER_MESSAGE_TEXT(server.requests[0])
-    expect(content).toContain('Attachment info')
-    expect(content).toContain(IMAGE_REF.attachmentId)
-    expect(content).toContain('image/png')
-    expect(content).toContain('call the vision tool')
+    // The full pinned placeholder rides the wire verbatim: lock the exact
+    // wording and the attachment-info JSON (stable field order) against drift.
+    expect(content).toBe(
+      `[The user uploaded an image. Attachment info ${JSON.stringify(IMAGE_REF)}. `
+      + 'The current model cannot see image content; if you need to understand it, call the vision tool '
+      + 'and pass the attachment info JSON above to the attachment_info parameter.]',
+    )
     // No image bytes reach an image-incapable route on the wire.
     expect(content).not.toContain('data:')
   })
