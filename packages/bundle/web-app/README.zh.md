@@ -20,6 +20,10 @@ dsh 浏览器表层组合包。[`cordis.patch.yml`](cordis.patch.yml) 叠加在 
 
 该提示词段落位于系统提示词靠前位置，且在进程整个生命周期内稳定（端口是启动期事实），因此不会使跨轮次缓存失效。
 
+## 运行时身份端点
+
+`GET /api/runtime.identity` 返回 `{product, desktopProtocol, version, instanceId, homeKind}`。配套的桌面外壳探测该端点，以决定是附加到此 Web 宿主还是启动自己的宿主。这些字段均不敏感：`product` 恒为 `deepseek-harness`，`desktopProtocol` 为 `1`，`version` 是本组合包的包版本，`instanceId` 是每个进程一个的匿名 UUID，`homeKind` 在符号化的 `~/.dsh` 主目录下为 `default`，当 `$DSH_HOME` 覆盖它时为 `custom`。该路由仅允许 GET（任何其他方法以 `allow: GET` 应答 405），JSON 使用 `cache-control: no-store`；绝不返回任何绝对 Harness 主目录路径。
+
 ## 已知限制与延期工作
 
 - **前端 dist 必须已构建**：对 dist 的 `require.resolve` 在激活时明确报错并给出构建提示；没有从源码直接服务的回退路径。

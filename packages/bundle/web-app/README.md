@@ -20,6 +20,10 @@ One source line and one prompt paragraph per session plus two managed-environmen
 
 The prompt section sits near the system prompt's head and is stable for the life of the process (the port is a boot fact), so it does not invalidate the cache across turns.
 
+## Runtime identity endpoint
+
+`GET /api/runtime.identity` answers `{product, desktopProtocol, version, instanceId, homeKind}`. A companion desktop shell probes it to decide whether to attach to this Web Host or start its own. The fields are non-sensitive: `product` is always `deepseek-harness`, `desktopProtocol` is `1`, `version` is this bundle's package version, `instanceId` is one anonymous UUID per process, and `homeKind` is `default` for the symbolic `~/.dsh` home or `custom` when `$DSH_HOME` overrides it. The route is GET-only (any other method answers 405 with `allow: GET`) and the JSON is `cache-control: no-store`; no absolute Harness home path is ever returned.
+
 ## Known Limitations and Deferred Work
 
 - **The frontend dist must be built** — `require.resolve` of the dist fails loud at activation with a build hint; there is no source-serving fallback.
