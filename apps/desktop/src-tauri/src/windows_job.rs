@@ -267,9 +267,28 @@ impl InheritedPipes {
         fn mark_inherit(handle: HANDLE) -> windows::core::Result<()> {
             unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT.0, HANDLE_FLAG_INHERIT) }
         }
-        mark_inherit(child_stdin).map_err(JobError::HandleFlags)?;
-        mark_inherit(child_stdout).map_err(JobError::HandleFlags)?;
-        mark_inherit(child_stderr).map_err(JobError::HandleFlags)?;
+        // A mid-way failure closes every handle created so far, exactly once,
+        // like the CreatePipe error paths above.
+        let close_all = || {
+            let _ = unsafe { CloseHandle(child_stdin) };
+            let _ = unsafe { CloseHandle(parent_stdin) };
+            let _ = unsafe { CloseHandle(child_stdout) };
+            let _ = unsafe { CloseHandle(parent_stdout) };
+            let _ = unsafe { CloseHandle(child_stderr) };
+            let _ = unsafe { CloseHandle(parent_stderr) };
+        };
+        if let Err(error) = mark_inherit(child_stdin) {
+            close_all();
+            return Err(JobError::HandleFlags(error));
+        }
+        if let Err(error) = mark_inherit(child_stdout) {
+            close_all();
+            return Err(JobError::HandleFlags(error));
+        }
+        if let Err(error) = mark_inherit(child_stderr) {
+            close_all();
+            return Err(JobError::HandleFlags(error));
+        }
 
         Ok(InheritedPipes {
             child_stdin,
