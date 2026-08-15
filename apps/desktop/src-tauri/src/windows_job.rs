@@ -51,8 +51,11 @@ const STILL_ACTIVE: u32 = 259;
 /// How long `OwnedProcess::wait` sleeps between exit probes.
 const WAIT_PROBE_INTERVAL: Duration = Duration::from_millis(20);
 /// How long `terminate_tree` waits for the process to wind down after the job
-/// close.
-const TERMINATE_GRACE: Duration = Duration::from_secs(5);
+/// close. Closing a kill-on-close job terminates the tree at kernel teardown,
+/// so this window only confirms quiescence before handles release; the plan
+/// bounds a desktop session-end shutdown to five seconds of host grace plus
+/// one second of job wait.
+const TERMINATE_GRACE: Duration = Duration::from_secs(1);
 /// The pipe buffer size passed to `CreatePipe`.
 const PIPE_BUFFER_SIZE: u32 = 256 * 1024;
 /// The largest control frame `write_control_frame` accepts.

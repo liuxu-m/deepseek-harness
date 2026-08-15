@@ -934,10 +934,10 @@ Test a `DesktopController` with fake window, opener, and supervisor ports: close
 - [ ] **Step 2: Verify lifecycle tests fail**
 
 ```powershell
-cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml tray instance window
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib tray
 ```
 
-Expected: FAIL because the modules are absent.
+Expected: FAIL because the modules are absent. (Cargo accepts one test-name filter; `--lib tray` targets the unit-test module.)
 
 - [ ] **Step 3: Create the WebView at the resolved URL**
 
