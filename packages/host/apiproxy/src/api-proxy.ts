@@ -2294,7 +2294,8 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             })
             const pendingImage = [...found.agent.inbox.nextTurn, ...found.agent.inbox.nextStep]
               .some(message => contentHasImage(message.content))
-            if (pendingImage || messagesHaveImage(found.agent.session.deriveMessages())) {
+            if (ctx.get('globalImage') !== true
+              && (pendingImage || messagesHaveImage(found.agent.session.deriveMessages()))) {
               const info = await ctx.llm.resolveModelInfo(resolved.provider, resolved.model)
               if (info.inputModalities !== undefined && !info.inputModalities.includes('image')) {
                 return err(request, {
@@ -2483,14 +2484,24 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const admit = async (): Promise<RpcResponse<{ accepted: true }>> => {
           try {
             if (hasImage) {
-              const current = selectionFor(agent).current
-              const modelInfo = await ctx.llm.resolveModelInfo(current.provider, current.model)
-              if (modelInfo.inputModalities !== undefined && !modelInfo.inputModalities.includes('image')) {
-                return err(request, {
-                  code: 'attachment-error',
-                  message: `Model "${current.model}" does not support image input.`,
-                  details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
-                })
+              if (ctx.get('globalImage') === true) {
+                if (ctx.get('attachments') === undefined) {
+                  return err(request, {
+                    code: 'attachment-error',
+                    message: 'Image input requires the durable attachment service.',
+                    details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
+                  })
+                }
+              } else {
+                const current = selectionFor(agent).current
+                const modelInfo = await ctx.llm.resolveModelInfo(current.provider, current.model)
+                if (modelInfo.inputModalities !== undefined && !modelInfo.inputModalities.includes('image')) {
+                  return err(request, {
+                    code: 'attachment-error',
+                    message: `Model "${current.model}" does not support image input.`,
+                    details: { reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES' },
+                  })
+                }
               }
             }
             const durable = await durablePromptContent(ctx, content)
