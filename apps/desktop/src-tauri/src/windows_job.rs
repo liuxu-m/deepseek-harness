@@ -35,9 +35,9 @@ use windows::Win32::System::JobObjects::{
 };
 use windows::Win32::System::Pipes::CreatePipe;
 use windows::Win32::System::Threading::{
-    CreateProcessW, GetExitCodeProcess, ResumeThread, TerminateProcess, CREATE_NO_WINDOW,
-    CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION,
-    STARTF_USESTDHANDLES, STARTUPINFOW,
+    CreateProcessW, GetExitCodeProcess, OpenProcess, ResumeThread, TerminateProcess,
+    CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, PROCESS_CREATION_FLAGS,
+    PROCESS_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOW,
 };
 use windows::Win32::Security::SECURITY_ATTRIBUTES;
 
@@ -443,6 +443,16 @@ impl core::fmt::Debug for OwnedProcess {
     }
 }
 
+// SAFETY: `OwnedProcess` holds raw Win32 process/job handles and parent-side
+// stdio `File`s. The handles are fully owned OS objects whose address-space
+// residence does not depend on the thread that opened them, so moving the value
+// to another thread is safe. The shell supervises at most one host and
+// serializes all access to the supervisor (including the contained
+// `OwnedProcess`) behind a `Mutex` (Tauri-managed state), so the handles are
+// never used concurrently. Moving without that lock would be unsound; the lock
+// is the invariant that makes this `Send` impl valid.
+unsafe impl Send for OwnedProcess {}
+
 impl OwnedProcess {
     /// Spawn `command` with `args`, contain it in a kill-on-close job with its
     /// stdio on inherited pipes, and resume it.
@@ -579,5 +589,40 @@ fn close_job(job: &mut HANDLE) {
     if !job.is_invalid() {
         close_handle(*job);
         *job = INVALID_HANDLE_VALUE;
+    }
+}
+
+/// Report whether the process `pid` is currently alive, best-effort.
+///
+/// Opens the process with query-limited rights and probes its exit code. A
+/// handle that cannot be opened, or whose exit code is no longer `STILL_ACTIVE`,
+/// means the process is dead for our purposes. A pid that was already reaped
+/// reports not-alive.
+fn process_is_alive(pid: u32) -> bool {
+    let Ok(process) =
+        (unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) })
+    else {
+        return false;
+    };
+    let mut code: u32 = 0;
+    let alive = unsafe { GetExitCodeProcess(process, &mut code) }.is_ok();
+    close_handle(process);
+    alive && code == STILL_ACTIVE
+}
+
+/// Wait up to `timeout` for `pid` to be confirmed dead, polling briefly. Used
+/// by the startup-error Retry to confirm a previously failed owned tree is
+/// reclaimed before discovery re-runs. Returns whether the process was observed
+/// dead within the bound. Best-effort: it never blocks beyond `timeout`.
+pub fn wait_until_dead(pid: u32, timeout: std::time::Duration) -> bool {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        if !process_is_alive(pid) {
+            return true;
+        }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(WAIT_PROBE_INTERVAL);
     }
 }

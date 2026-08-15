@@ -17,16 +17,19 @@ tauri-build = { version = "2.6.3", features = [] }
 # deserialization and supervisor diagnostics in Tasks 7-9.
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tauri = { version = "2.11.5", features = [] }
+tauri = { version = "2.11.5", features = ["tray-icon", "image-png", "image-ico"] }
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-single-instance = "2.4.3"
 thiserror = "2"
-# windows crate: the native process-tree containment boundary (Task 8). The
-# Win32 feature flags bundle the Job Objects, suspended-process creation, and
-# inherited-pipe APIs used by windows_job alongside the Win32 Foundation and
-# Security types those bindings need. The crate compiles on non-Windows (its
-# Win32 bindings are cfg-out there), so the dependency is unconditional; only
-# the windows_job module that uses it is Windows-gated.
+url = "2"
+# windows crate: the native process-tree containment boundary (Task 8) and the
+# crash-before-webview system message box. The Win32 feature flags bundle the
+# Job Objects, suspended-process creation, inherited-pipe APIs used by
+# windows_job alongside the Win32 Foundation and Security types those bindings
+# need, plus the WindowsAndMessaging `MessageBoxW` used to surface an
+# uncoversable startup error. The crate compiles on non-Windows (its Win32
+# bindings are cfg-out there), so the dependency is unconditional; only the
+# windows_job and startup-error modules that use it are Windows-gated.
 windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Security",
@@ -35,4 +38,5 @@ windows = { version = "0.61", features = [
   "Win32_System_Pipes",
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
 ] }
