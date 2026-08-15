@@ -46,14 +46,10 @@ function stageDist(): string {
 /** A fake webServer capturing the fallback seat and index taps. */
 function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server: WebServer; seat: () => unknown } {
   let fallback: unknown
-  const routes = new Set<string>()
   const server = {
     host,
     port: 4567,
-    register: (route: { kind: 'exact' | 'prefix'; path: string }) => {
-      routes.add(route.path)
-      return () => { routes.delete(route.path) }
-    },
+    register: () => () => {},
     registerFallback: (handler: unknown) => {
       fallback = handler
       return () => { fallback = undefined }
