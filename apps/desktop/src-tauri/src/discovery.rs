@@ -33,8 +33,9 @@ pub enum Discovery {
     Attach {
         /// The base URL of the compatible host.
         base_url: String,
-        /// The compatible host's anonymous instance id.
-        instance_id: String,
+        /// The compatible host's verified identity; the supervisor re-validates
+        /// readiness against it after startup.
+        identity: RuntimeIdentity,
     },
     /// Nothing is listening on the default port; start the host there.
     StartDefault,
@@ -179,7 +180,7 @@ fn judge_response(url: &str, response: &[u8]) -> Result<Discovery, DiscoveryErro
     }
     Ok(Discovery::Attach {
         base_url: url.to_string(),
-        instance_id: identity.instance_id,
+        identity,
     })
 }
 

@@ -11,7 +11,7 @@ use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::time::Duration;
 
-use deepseek_harness_desktop_lib::{discover, Discovery};
+use deepseek_harness_desktop_lib::{discover, identity::HomeKind, identity::RuntimeIdentity, Discovery};
 
 const IDENTITY_PATH: &str = "/api/runtime.identity";
 const HEAD: &str = "HTTP/1.1";
@@ -111,7 +111,13 @@ fn attaches_to_a_compatible_host() {
         discover(&url).unwrap(),
         Discovery::Attach {
             base_url: url,
-            instance_id: "fixture-instance".into(),
+            identity: RuntimeIdentity {
+                product: "deepseek-harness".into(),
+                desktop_protocol: 1,
+                version: "0.1.0-test".into(),
+                instance_id: "fixture-instance".into(),
+                home_kind: HomeKind::Default,
+            },
         }
     );
 }

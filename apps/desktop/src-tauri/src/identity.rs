@@ -27,7 +27,7 @@ pub enum HomeKind {
 /// The exact identity served at `DSH_RUNTIME_IDENTITY_PATH`. Field names follow
 /// the wire (`camelCase`) and any unknown field fails deserialization, so a
 /// future protocol bump is detected here instead of being silently attached.
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct RuntimeIdentity {
     /// The product name; must equal `DSH_RUNTIME_PRODUCT`.
