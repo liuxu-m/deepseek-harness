@@ -115,13 +115,15 @@
     }
 
     document.getElementById("retry").addEventListener("click", function () {
-      call("startup_error_reset").then(function () { messages.textContent = "Retrying…"; });
+      call("startup_error_reset").then(function () { messages.textContent = "Retrying…"; })
+        .catch(function (reason) { messages.textContent = String(reason); });
     });
     document.getElementById("open-logs").addEventListener("click", function () {
-      call("startup_error_open_logs").then(function () { messages.textContent = "Opened the log directory."; });
+      call("startup_error_open_logs").then(function () { messages.textContent = "Opened the log directory."; })
+        .catch(function (reason) { messages.textContent = "Failed to open logs: " + String(reason); });
     });
     document.getElementById("exit").addEventListener("click", function () {
-      call("startup_error_exit");
+      call("startup_error_exit").catch(function (reason) { messages.textContent = String(reason); });
     });
   </script>
 </body>

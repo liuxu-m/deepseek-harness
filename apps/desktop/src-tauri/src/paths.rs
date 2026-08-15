@@ -5,10 +5,10 @@
 //! runtime resolves at startup. Writable state never derives from the
 //! extraction directory: it is a managed, replace-on-update location.
 
-use std::fmt;
 use std::path::{Path, PathBuf};
 
 use tauri::Manager;
+use thiserror::Error;
 
 /// Path set derived from the shell's process roots.
 ///
@@ -27,24 +27,22 @@ pub struct DesktopPaths {
     pub logs: PathBuf,
 }
 
-/// Reasons `DesktopPaths::from_roots` can fail.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Reasons `DesktopPaths` derivation can fail.
+#[derive(Debug, Error)]
 pub enum DesktopPathsError {
     /// The executable path has no parent directory.
+    #[error("executable path has no parent directory")]
     MissingExecutableParent,
+    /// The running process's executable could not be resolved.
+    #[error("the desktop shell executable could not be resolved: {0}")]
+    ExecutableUnresolved(#[source] std::io::Error),
+    /// The user home directory could not be resolved.
+    #[error("the user home directory could not be resolved")]
+    HomeUnresolved,
+    /// Neither the machine-local app-data directory nor `LOCALAPPDATA` could be resolved.
+    #[error("the machine-local app-data directory could not be resolved")]
+    LocalAppDataUnresolved,
 }
-
-impl fmt::Display for DesktopPathsError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            DesktopPathsError::MissingExecutableParent => {
-                write!(f, "executable path has no parent directory")
-            }
-        }
-    }
-}
-
-impl std::error::Error for DesktopPathsError {}
 
 impl DesktopPaths {
     /// Derive `DesktopPaths` from process roots passed explicitly, so the
@@ -69,27 +67,17 @@ impl DesktopPaths {
     }
 
     /// Derive `DesktopPaths` from the running process and the Tauri app's
-    /// resolved user directories.
+    /// resolved user directories. Fails loud rather than degrading to the
+    /// current directory when a user root cannot be resolved.
     pub fn from_environment(app: &tauri::AppHandle) -> Result<Self, DesktopPathsError> {
-        let exe = std::env::current_exe().map_err(|_| DesktopPathsError::MissingExecutableParent)?;
-        Self::from_roots(&exe, &dirs_home_dir(app), &dirs_local_app_data(app))
+        let exe = std::env::current_exe().map_err(DesktopPathsError::ExecutableUnresolved)?;
+        let home = app.path().home_dir().map_err(|_| DesktopPathsError::HomeUnresolved)?;
+        let local_app_data = app
+            .path()
+            .local_data_dir()
+            .map_err(|_| DesktopPathsError::LocalAppDataUnresolved)?;
+        Self::from_roots(&exe, &home, &local_app_data)
     }
-}
-
-fn dirs_home_dir(app: &tauri::AppHandle) -> PathBuf {
-    app.path()
-        .home_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-}
-
-fn dirs_local_app_data(app: &tauri::AppHandle) -> PathBuf {
-    app.path()
-        .local_data_dir()
-        .unwrap_or_else(|_| {
-            std::env::var_os("LOCALAPPDATA")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("."))
-        })
 }
 
 #[cfg(test)]
@@ -118,6 +106,6 @@ mod tests {
             Path::new(r"C:\Users\Ada"),
             Path::new(r"C:\Users\Ada\AppData\Local"),
         );
-        assert_eq!(result, Err(DesktopPathsError::MissingExecutableParent));
+        assert!(matches!(result, Err(DesktopPathsError::MissingExecutableParent)));
     }
 }

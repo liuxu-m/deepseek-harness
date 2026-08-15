@@ -19,7 +19,9 @@ pub fn run() {
             // A second launch focuses the existing window instead of spawning
             // another process. The window appears in a later task.
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_focus();
+                if let Err(error) = window.set_focus() {
+                    eprintln!("failed to focus the existing window: {error}");
+                }
             }
         }))
         .invoke_handler(tauri::generate_handler![
@@ -39,19 +41,16 @@ pub fn run() {
 #[tauri::command]
 fn startup_error_reset(_app: tauri::AppHandle) {}
 
-/// Open the desktop logs directory for the startup-error page.
+/// Open the desktop logs directory for the startup-error page. Reports the
+/// failure reason to the page so it never shows a false success.
 #[tauri::command]
-fn startup_error_open_logs(app: tauri::AppHandle) {
-    let logs = match paths::DesktopPaths::from_environment(&app) {
-        Ok(paths) => paths.logs,
-        Err(error) => {
-            eprintln!("failed to derive logs path: {error}");
-            return;
-        }
-    };
-    if let Err(error) = app.opener().open_path(logs.to_string_lossy().into_owned(), None::<&str>) {
-        eprintln!("failed to open log directory: {error}");
-    }
+fn startup_error_open_logs(app: tauri::AppHandle) -> Result<(), String> {
+    let logs = paths::DesktopPaths::from_environment(&app)
+        .map_err(|error| format!("failed to derive logs path: {error}"))?
+        .logs;
+    app.opener()
+        .open_path(logs.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|error| format!("failed to open log directory: {error}"))
 }
 
 /// Exit the desktop shell for the startup-error page.

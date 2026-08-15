@@ -13,8 +13,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
+# serde/serde_json: unused in Task 6; pre-provisioned for the identity
+# deserialization and supervisor diagnostics in Tasks 7-9.
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tauri = { version = "2.11.5", features = [] }
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-single-instance = "2.4.3"
+thiserror = "2"
