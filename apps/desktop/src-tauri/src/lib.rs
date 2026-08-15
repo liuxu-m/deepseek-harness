@@ -5,7 +5,11 @@
 //! plugins and registers the error-page commands; window creation and host
 //! supervision land in later tasks.
 
+pub mod discovery;
+pub mod identity;
 pub mod paths;
+
+pub use discovery::{discover, Discovery};
 
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
