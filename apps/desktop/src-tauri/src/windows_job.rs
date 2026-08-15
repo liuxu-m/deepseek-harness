@@ -186,13 +186,10 @@ impl SuspendedProcess {
         unsafe { ResumeThread(self.thread) }
     }
 
-    /// Move the process handle and pid out, forbidding a double close of the
-    /// already-released thread handle.
+    /// Move the process handle and pid out. The handles are Copy and
+    /// `SuspendedProcess` implements no `Drop`, so the source is dropped as-is.
     fn into_process(self) -> (HANDLE, u32) {
-        let process = self.process;
-        let pid = self.pid;
-        std::mem::forget(self);
-        (process, pid)
+        (self.process, self.pid)
     }
 }
 
@@ -317,7 +314,7 @@ fn build_env_block(env: Option<&[(String, String)]>) -> Option<Vec<u16>> {
         .iter()
         .map(|(k, v)| (k.as_str(), v.as_str()))
         .collect();
-    entries.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    entries.sort_by_key(|(key, _)| key.to_lowercase());
     let mut block = Vec::new();
     for (key, value) in entries {
         for unit in format!("{key}={value}").encode_utf16() {
@@ -356,7 +353,7 @@ pub fn create_process_suspended(
         flags.0 |= CREATE_UNICODE_ENVIRONMENT.0;
     }
 
-    let mut startup = STARTUPINFOW {
+    let startup = STARTUPINFOW {
         cb: core::mem::size_of::<STARTUPINFOW>() as u32,
         dwFlags: STARTF_USESTDHANDLES,
         hStdInput: pipes.child_stdin,
@@ -382,7 +379,7 @@ pub fn create_process_suspended(
             flags,
             environment_ptr,
             current_dir_ptr,
-            &mut startup,
+            &startup,
             &mut process_info,
         )
     };
@@ -459,9 +456,7 @@ impl OwnedProcess {
         let mut job = create_kill_on_close_job()?;
         let pipes = InheritedPipes::create()?;
         let mut suspended = create_process_suspended(command, args, cwd, env, &pipes)?;
-        if let Err(error) = assign_to_job(&procs, job.handle(), &mut suspended) {
-            return Err(error);
-        }
+        assign_to_job(&procs, job.handle(), &mut suspended)?;
         let (process, pid) = suspended.into_process();
         let InheritedPipes {
             parent_stdin,

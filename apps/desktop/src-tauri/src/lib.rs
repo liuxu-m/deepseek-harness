@@ -10,6 +10,9 @@ pub mod identity;
 pub mod paths;
 
 #[cfg(windows)]
+pub mod host_log;
+
+#[cfg(windows)]
 pub mod supervisor;
 
 #[cfg(windows)]

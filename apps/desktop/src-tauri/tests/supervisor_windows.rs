@@ -70,7 +70,7 @@ fn spawn_fixture(mode: &str) -> std::io::Result<OwnedFixture> {
         None,
         Some(&env),
     )
-    .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+    .map_err(std::io::Error::other)?;
     let stdout = process
         .take_stdout()
         .expect("fixture stdout is present before take_stdout");
@@ -227,6 +227,9 @@ fn spawn_grandchild_and_report() {
         });
     println!("GRANDCHILD={}", child.id());
     std::io::Write::flush(&mut std::io::stdout()).ok();
+    // Deliberately never reap the grandchild: both this fixture and the
+    // grandchild must stay alive until the owning Job closes and reclaims them.
+    std::mem::forget(child);
     wait_forever();
 }
 

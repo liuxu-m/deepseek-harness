@@ -19,17 +19,16 @@
 //! added. Neither env contents nor identity response bodies are ever written to
 //! a log.
 
-use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use thiserror::Error;
-use windows::Win32::System::SystemInformation::GetLocalTime;
 
 use crate::discovery::{discover, Discovery, DiscoveryError, DESKTOP_DEFAULT_PORT};
+use crate::host_log::{DesktopLog, RotatingLog};
 use crate::identity::{RuntimeIdentity, DSH_RUNTIME_IDENTITY_PATH};
 use crate::paths::DesktopPaths;
 use crate::windows_job::{JobError, OwnedProcess};
@@ -45,6 +44,9 @@ const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// The size at which `host.log` rotates to `host.log.1`.
 const HOST_LOG_ROTATE_BYTES: u64 = 5 * 1024 * 1024;
+/// The maximum length of one drained line; longer output is truncated so a
+/// pathological writer cannot grow a single in-memory line without bound.
+const MAX_LOG_LINE_BYTES: usize = 64 * 1024;
 /// The bundled CLI under the extraction root, relative to the node binary.
 const HOST_HEADLESS_ARGS: &str = "--profile web --port";
 
@@ -110,106 +112,6 @@ pub enum DesktopError {
     /// Writing the control frame failed while the child was still alive.
     #[error("shutdown control fell through with the host still running: {0}")]
     ShutdownControl(#[source] std::io::Error),
-}
-
-/// A log that appends timestamped supervisor lifecycle events.
-#[derive(Debug, Clone)]
-struct DesktopLog {
-    path: PathBuf,
-}
-
-impl DesktopLog {
-    fn new(path: PathBuf) -> Self {
-        Self { path }
-    }
-
-    /// Append one timestamped `[kind] detail` line. Best-effort: a failed write
-    /// is surfaced on stderr rather than failing the supervised operation.
-    fn event(&self, kind: &str, detail: &str) {
-        if let Some(parent) = self.path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        let line = format!("{} [{kind}] {detail}", local_now());
-        match OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .and_then(|mut f| writeln!(f, "{line}"))
-        {
-            Ok(()) => {}
-            Err(error) => eprintln!("desktop log write failed: {error}"),
-        }
-    }
-}
-
-/// The machine-local civil time as an ISO-like `YYYY-MM-DDTHH:MM:SS` stamp.
-fn local_now() -> String {
-    let t = unsafe { GetLocalTime() };
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}",
-        t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond
-    )
-}
-
-/// A single-host log that rotates to `<path>.1` once it exceeds `max_size`; the
-/// current file plus one rotated copy is the whole retained set (2 files).
-///
-/// Rotation renames the current file to `<path>.1`, discarding any older copy,
-/// then reopens a fresh current file. Only the current file and its newest
-/// rotated predecessor are kept.
-#[derive(Debug)]
-struct RotatingLog {
-    path: PathBuf,
-    file: Option<File>,
-    max_size: u64,
-}
-
-impl RotatingLog {
-    fn new(path: PathBuf, max_size: u64) -> Self {
-        Self {
-            path,
-            file: None,
-            max_size,
-        }
-    }
-
-    /// Append `line` plus a newline, rotating first when the current file would
-    /// exceed `max_size`.
-    fn append(&mut self, line: &[u8]) -> std::io::Result<()> {
-        if self.file.is_none() {
-            if let Some(parent) = self.path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            self.file = Some(
-                OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&self.path)?,
-            );
-        }
-        let current = self.file.as_ref().expect("log file is open").metadata()?.len();
-        if current.saturating_add(line.len() as u64) > self.max_size {
-            self.rotate()?;
-        }
-        let file = self.file.as_mut().expect("log file is open");
-        file.write_all(line)?;
-        file.write_all(b"\n")?;
-        file.flush()
-    }
-
-    fn rotate(&mut self) -> std::io::Result<()> {
-        self.file = None;
-        let rotated = PathBuf::from(format!("{}.1", self.path.to_string_lossy()));
-        let _ = fs::remove_file(&rotated);
-        fs::rename(&self.path, &rotated)?;
-        self.file = Some(
-            OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&self.path)?,
-        );
-        Ok(())
-    }
 }
 
 /// One readiness-relevant event from the stdout drain, or the drain's EOF.
@@ -328,10 +230,7 @@ impl HostSupervisor {
         env: Option<&[(String, String)]>,
     ) -> Result<String, DesktopError> {
         let start = Instant::now();
-        let ready = match self.establish_owned(command, args, cwd, env) {
-            Ok(ready) => ready,
-            Err(error) => return Err(error),
-        };
+        let ready = self.establish_owned(command, args, cwd, env)?;
         let readiness_ms = start.elapsed().as_millis();
         let base_url = ready.base_url.clone();
         self.desktop_log.event(
@@ -440,7 +339,14 @@ impl HostSupervisor {
 
             match rx.recv_timeout(POLL_INTERVAL) {
                 Ok(DrainEvent::Url(line)) => match parse_web_url(&line) {
-                    Some(base) => pending_base = Some(base),
+                    // Only the first readiness line selects the probe target; a
+                    // later `dsh web:` line cannot flip a live probe to another
+                    // loopback port mid-startup.
+                    Some(base) => {
+                        if pending_base.is_none() {
+                            pending_base = Some(base);
+                        }
+                    }
                     None => {
                         process.terminate_tree();
                         self.join_drains();
@@ -572,6 +478,11 @@ impl HostSupervisor {
     }
 
     /// Wait for every active log drain to finish reading to EOF. Idempotent.
+    ///
+    /// Closing the kill-on-close Job reaps the child at kernel teardown, which
+    /// closes the child's pipe write ends and EOFs the readers, so a join cannot
+    /// block on a live child. Only a child that detached from the Job could keep
+    /// the pipe open; the supervisor never creates such a child.
     fn join_drains(&mut self) {
         let handles = std::mem::take(&mut self.drains);
         for handle in handles {
@@ -628,6 +539,9 @@ fn production_env(paths: &DesktopPaths) -> Vec<(String, String)> {
 }
 
 /// Whether an env var name carries a secret and must not reach a child or a log.
+/// The substring match is deliberately broad (per the plan's `KEY`/`SECRET`/
+/// `TOKEN`/`PASSWORD` names): it may drop an innocuous var like `MONKEY_BARREL`,
+/// which is safe — a missing var is always safer than a leaked one.
 fn is_secret_name(name: &str) -> bool {
     let upper = name.to_ascii_uppercase();
     ["KEY", "SECRET", "TOKEN", "PASSWORD"]
@@ -655,6 +569,11 @@ fn parse_web_url(line: &str) -> Option<String> {
 /// Read `reader` line by line, appending UTF-8-lossy lines to `log`. When
 /// `send_urls`, forward every `dsh web: `-prefixed line to `tx` for readiness
 /// parsing and send a final `Eof` once the pipe closes.
+///
+/// Each line is bounded at `MAX_LOG_LINE_BYTES`: a longer line is truncated to
+/// that budget, the remainder of the line is discarded, and the line carries a
+/// `…[truncated]` marker, so one pathological writer cannot grow a single
+/// in-memory line without bound.
 fn drain_output<R: Read + Send + 'static>(
     reader: R,
     log: Arc<Mutex<RotatingLog>>,
@@ -662,25 +581,68 @@ fn drain_output<R: Read + Send + 'static>(
     send_urls: bool,
 ) {
     let mut reader = BufReader::new(reader);
-    let mut buf = Vec::new();
+    let mut buf = Vec::with_capacity(256);
     loop {
         buf.clear();
-        match reader.read_until(b'\n', &mut buf) {
-            Ok(0) | Err(_) => break,
-            Ok(_) => {
-                trim_eol(&mut buf);
-                let text = String::from_utf8_lossy(&buf);
-                if let Ok(mut log) = log.lock() {
-                    if log.append(text.as_bytes()).is_err() {
-                        eprintln!("host log append failed");
+        let mut overlong = false;
+        let mut eof = false;
+        // Assemble one line with a hard byte budget. `fill_buf`/`consume` keeps
+        // `buf` bounded even when the writer never emits a newline.
+        loop {
+            let available = match reader.fill_buf() {
+                Ok(available) => {
+                    if available.is_empty() {
+                        eof = true;
+                        break;
                     }
+                    available
                 }
-                if send_urls && text.starts_with("dsh web: ") {
-                    if let Some(tx) = &tx {
-                        let _ = tx.send(DrainEvent::Url(text.into_owned()));
+                Err(_) => {
+                    eof = true;
+                    break;
+                }
+            };
+            match available.iter().position(|byte| *byte == b'\n') {
+                Some(newline) => {
+                    if !overlong {
+                        let take = newline.min(MAX_LOG_LINE_BYTES - buf.len());
+                        buf.extend_from_slice(&available[..take]);
+                        overlong = take < newline;
                     }
+                    reader.consume(newline + 1);
+                    break;
+                }
+                None => {
+                    if !overlong {
+                        let take = available.len().min(MAX_LOG_LINE_BYTES - buf.len());
+                        buf.extend_from_slice(&available[..take]);
+                        overlong = take < available.len();
+                    }
+                    let taken = available.len();
+                    reader.consume(taken);
                 }
             }
+        }
+        if eof && buf.is_empty() {
+            break;
+        }
+        trim_eol(&mut buf);
+        let mut text = String::from_utf8_lossy(&buf).into_owned();
+        if overlong {
+            text.push_str("…[truncated]");
+        }
+        if let Ok(mut log) = log.lock() {
+            if log.append(text.as_bytes()).is_err() {
+                eprintln!("host log append failed");
+            }
+        }
+        if send_urls && text.starts_with("dsh web: ") {
+            if let Some(tx) = &tx {
+                let _ = tx.send(DrainEvent::Url(text));
+            }
+        }
+        if eof {
+            break;
         }
     }
     if send_urls {
@@ -741,32 +703,6 @@ mod tests {
         assert!(is_secret_name("clientSecret"));
         assert!(!is_secret_name("DSH_HOME"));
         assert!(!is_secret_name("PATH"));
-    }
-
-    #[test]
-    fn rotation_keeps_the_current_file_and_one_predecessor() {
-        use std::env::temp_dir;
-        let dir = temp_dir().join(format!("dsh-rotate-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("host.log");
-        let mut log = RotatingLog::new(path.clone(), 10);
-        // 10-byte budget: each append of a larger line forces rotation.
-        log.append(b"0123456789abc").unwrap();
-        log.append(b"x").unwrap();
-        log.append(b"0123456789abc").unwrap();
-        assert!(path.exists(), "current file must exist");
-        assert!(
-            PathBuf::from(format!("{}.1", path.to_string_lossy())).exists(),
-            "one rotated copy must be retained"
-        );
-        // Only two files are ever on disk.
-        let files = fs::read_dir(&dir)
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .count();
-        assert_eq!(files, 2, "expected exactly the current file plus one rotated copy");
-        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
