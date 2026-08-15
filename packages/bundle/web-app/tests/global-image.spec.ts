@@ -73,7 +73,14 @@ describe('globalImage flag service', () => {
   it('provides globalImage false by default', async () => {
     stageDist()
     const ctx = new Context()
-    await mountWebApp(ctx, new webApp.Config({ printUrl: false, surfaceContext: false, trustedHosts: [], globalImage: false }))
+    // Omit `globalImage` so the assertion proves the schema's `z.boolean().default(false)`,
+    // not an explicit value. The static `z<Config>` input type requires the key, so cast the
+    // literal to let the runtime zod validation supply the default.
+    await mountWebApp(ctx, new webApp.Config({
+      printUrl: false,
+      surfaceContext: false,
+      trustedHosts: [] as string[],
+    } as unknown as webApp.Config))
     expect(ctx.get('globalImage')).toBe(false)
     // Disposal removes the service: the registry entry is torn down with the fiber.
     await ctx.fiber.dispose()
