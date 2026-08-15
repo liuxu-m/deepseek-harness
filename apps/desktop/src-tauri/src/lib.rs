@@ -10,6 +10,9 @@ pub mod identity;
 pub mod paths;
 
 #[cfg(windows)]
+pub mod supervisor;
+
+#[cfg(windows)]
 pub mod windows_job;
 
 pub use discovery::{discover, Discovery};

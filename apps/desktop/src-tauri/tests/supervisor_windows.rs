@@ -11,12 +11,17 @@
 
 #![cfg(windows)]
 
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
+use std::thread;
 use std::time::{Duration, Instant};
 
+use deepseek_harness_desktop_lib::identity::{HomeKind, RuntimeIdentity};
+use deepseek_harness_desktop_lib::paths::DesktopPaths;
+use deepseek_harness_desktop_lib::supervisor::{DesktopError, HostSupervisor, ShutdownOutcome};
 use deepseek_harness_desktop_lib::windows_job::{
     create_kill_on_close_job, create_process_suspended, assign_to_job, InheritedPipes,
     OwnedProcess, Win32Procs,
@@ -169,6 +174,12 @@ fn run_fixture(mode: &str) {
         "ignore-frame" => wait_forever(),
         "spawn-grandchild" => spawn_grandchild_and_report(),
         "sleep-forever" => wait_forever(),
+        "early-exit" => std::process::exit(1),
+        "host-graceful" => run_host_fixture(HostIdentity::Compatible, HostThen::WaitForFrame),
+        "host-forced" => run_host_fixture(HostIdentity::Compatible, HostThen::WaitForever),
+        "host-identity-mismatch" => run_host_fixture(HostIdentity::Incompatible, HostThen::WaitForever),
+        "host-malformed-url" => run_host_fixture(HostIdentity::MalformedUrl, HostThen::WaitForever),
+        "host-timeout" => run_host_fixture(HostIdentity::Silent, HostThen::WaitForever),
         other => {
             eprintln!("unknown fixture mode: {other}");
             std::process::exit(2);
@@ -220,8 +231,90 @@ fn spawn_grandchild_and_report() {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers shared by the tests.
+// Supervisor fixtures: the test binary simulates a bundled web host.
 // ---------------------------------------------------------------------------
+
+/// How a host-mode fixture presents its readiness signal.
+enum HostIdentity {
+    /// Print a valid loopback URL and answer the identity probe compatibly.
+    Compatible,
+    /// Print a valid loopback URL but answer the identity probe incompatibly.
+    Incompatible,
+    /// Print a line that is not a loopback readiness URL at all.
+    MalformedUrl,
+    /// Print nothing (the host never signals readiness).
+    Silent,
+}
+
+/// What a host-mode fixture does after printing its readiness signal.
+enum HostThen {
+    /// Read a shutdown frame from stdin, then exit 0.
+    WaitForFrame,
+    /// Ignore stdin and never exit; the owning Job must reclaim it.
+    WaitForever,
+}
+
+/// A host-mode fixture: bind a loopback listener, serve the identity endpoint,
+/// print the `dsh web:` URL line, then wait for a frame or forever. This
+/// stands in for the bundled CLI/web host so a test can drive readiness and
+/// shutdown without a real deployable runtime (Task 11).
+fn run_host_fixture(identity: HostIdentity, then: HostThen) {
+    let listener = match TcpListener::bind("127.0.0.1:0") {
+        Ok(listener) => listener,
+        Err(error) => {
+            eprintln!("fixture failed to bind a loopback listener: {error}");
+            std::process::exit(6);
+        }
+    };
+    let port = listener.local_addr().unwrap().port();
+
+    match identity {
+        HostIdentity::Silent => {
+            // Never print the URL line; the supervisor must time out.
+        }
+        HostIdentity::MalformedUrl => {
+            // libtest writes `test fixture_dispatcher ... ` (no newline) before
+            // the body, so a leading newline keeps the URL the start of its own
+            // line the way the real web host prints it.
+            println!("\ndsh web: not-a-loopback-url");
+            let _ = std::io::Write::flush(&mut std::io::stdout());
+        }
+        HostIdentity::Compatible | HostIdentity::Incompatible => {
+            println!("\ndsh web: http://127.0.0.1:{port}");
+            let _ = std::io::Write::flush(&mut std::io::stdout());
+            let incompatible = matches!(identity, HostIdentity::Incompatible);
+            thread::spawn(move || serve_identity_loop(listener, incompatible));
+        }
+    }
+
+    match then {
+        HostThen::WaitForFrame => wait_for_control_frame(),
+        HostThen::WaitForever => wait_forever(),
+    }
+}
+
+/// Accept identity probes in a loop, responding with a compatible or
+/// incompatible runtime identity every time. The fixture keeps serving until
+/// its process is reclaimed, so a slow readiness poll is still answered.
+fn serve_identity_loop(listener: TcpListener, incompatible: bool) {
+    for stream in listener.incoming() {
+        let Ok(mut sock) = stream else { return };
+        let mut request = [0u8; 2048];
+        let _ = sock.read(&mut request);
+        let body = if incompatible {
+            r#"{"product":"deepseek-harness","desktopProtocol":2,"version":"0.1.0-test","instanceId":"fixture-incompatible","homeKind":"default"}"#
+        } else {
+            r#"{"product":"deepseek-harness","desktopProtocol":1,"version":"0.1.0-test","instanceId":"fixture-compatible","homeKind":"default"}"#
+        };
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = sock.write_all(response.as_bytes());
+        let _ = sock.flush();
+    }
+}
 
 /// Poll whether a process (by pid) has terminated, up to `timeout`. Returns
 /// true once the process no longer reports `STILL_ACTIVE`.
@@ -377,4 +470,158 @@ fn assignment_failure_terminates_the_suspended_child_before_closing_handles() {
         wait_until_dead(pid, TIMEOUT),
         "the suspended child survived assignment failure"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Supervisor lifecycle: discovery, spawn, readiness, and shutdown.
+// ---------------------------------------------------------------------------
+
+use deepseek_harness_desktop_lib::Discovery;
+
+/// A short startup deadline so never-ready fixtures fail fast instead of
+/// waiting the full 120-second production window.
+const STARTUP_SHORT: Duration = Duration::from_secs(3);
+
+/// A scratch logs directory for one supervisor, cleaned before use.
+fn scratch_logs(tag: &str) -> PathBuf {
+    let dir = std::env::temp_dir()
+        .join("dsh-supervisor-tests")
+        .join(format!("{}-{}", tag, std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// A `DesktopPaths` whose logs land in the scratch directory `tag`.
+fn test_paths(tag: &str) -> DesktopPaths {
+    let logs = scratch_logs(tag);
+    let mut paths = DesktopPaths::from_roots(
+        std::path::Path::new(r"C:\Portable\DeepSeek Harness\DeepSeek Harness.exe"),
+        std::path::Path::new(r"C:\Users\Ada"),
+        std::path::Path::new(r"C:\Users\Ada\AppData\Local"),
+    )
+    .unwrap();
+    paths.logs = logs;
+    paths
+}
+
+/// A supervisor for tests with a short startup deadline.
+fn supervisor(tag: &str) -> HostSupervisor {
+    HostSupervisor::new(test_paths(tag)).with_startup_deadline(STARTUP_SHORT)
+}
+
+/// A compatible runtime identity ready to attach to.
+fn compatible_identity_typed() -> RuntimeIdentity {
+    RuntimeIdentity {
+        product: "deepseek-harness".into(),
+        desktop_protocol: 1,
+        version: "0.1.0-test".into(),
+        instance_id: "fixture-compatible".into(),
+        home_kind: HomeKind::Default,
+    }
+}
+
+/// Spawn `mode` as an owned host under `supervisor`, returning the reported URL.
+fn spawn_supervised(supervisor: &mut HostSupervisor, mode: &str) -> Result<String, DesktopError> {
+    let (exe, args) = fixture_command(mode);
+    let mut env: Vec<(String, String)> = std::env::vars().collect();
+    env.push((FIXTURE_VAR.to_string(), mode.to_string()));
+    supervisor.spawn_with(exe.to_string_lossy().as_ref(), &args, None, Some(&env))
+}
+
+#[test]
+fn attached_shutdown_is_detached_and_touches_no_process() {
+    let mut supervisor = supervisor("attached");
+    let discovery = Discovery::Attach {
+        base_url: "http://127.0.0.1:3080".into(),
+        identity: compatible_identity_typed(),
+    };
+    let url = supervisor.start_from(&discovery).unwrap();
+    assert_eq!(url, "http://127.0.0.1:3080");
+    assert_eq!(supervisor.base_url(), Some("http://127.0.0.1:3080"));
+    assert_eq!(
+        supervisor.shutdown().unwrap(),
+        ShutdownOutcome::Detached
+    );
+    // Shutting down again is still a no-op.
+    assert_eq!(
+        supervisor.shutdown().unwrap(),
+        ShutdownOutcome::Detached
+    );
+    assert_eq!(supervisor.owned_pid(), None, "attach must never spawn a process");
+}
+
+#[test]
+fn owned_host_shuts_down_gracefully() {
+    let mut supervisor = supervisor("graceful");
+    let url = spawn_supervised(&mut supervisor, "host-graceful").unwrap();
+    assert!(
+        url.starts_with("http://127.0.0.1:"),
+        "expected a loopback URL, got {url}"
+    );
+    assert_eq!(
+        supervisor.identity().unwrap().instance_id,
+        "fixture-compatible"
+    );
+    let pid = supervisor.owned_pid().expect("an owned process is running");
+    assert_eq!(supervisor.shutdown().unwrap(), ShutdownOutcome::Graceful);
+    assert!(wait_until_dead(pid, TIMEOUT), "graceful child survived shutdown");
+}
+
+#[test]
+fn owned_host_that_ignores_the_frame_is_forced() {
+    let mut supervisor = supervisor("forced");
+    let _url = spawn_supervised(&mut supervisor, "host-forced").unwrap();
+    let pid = supervisor.owned_pid().expect("an owned process is running");
+    assert_eq!(supervisor.shutdown().unwrap(), ShutdownOutcome::Forced);
+    assert!(wait_until_dead(pid, TIMEOUT), "forced child survived its job close");
+}
+
+#[test]
+fn host_that_exits_before_ready_errors_and_leaves_no_process() {
+    let mut supervisor = supervisor("early-exit");
+    let error = spawn_supervised(&mut supervisor, "early-exit").unwrap_err();
+    assert!(
+        matches!(error, DesktopError::Readiness(_)),
+        "expected a readiness error, got {error:?}"
+    );
+    let pid = supervisor.owned_pid().expect("the early-exit child was spawned");
+    assert!(wait_until_dead(pid, TIMEOUT), "early-exit child survived");
+}
+
+#[test]
+fn host_that_never_signals_ready_times_out_and_is_reclaimed() {
+    let mut supervisor = supervisor("timeout");
+    let error = spawn_supervised(&mut supervisor, "host-timeout").unwrap_err();
+    assert!(
+        matches!(error, DesktopError::ReadinessTimeout(_)),
+        "expected a readiness timeout, got {error:?}"
+    );
+    let pid = supervisor.owned_pid().expect("the silent host was spawned");
+    assert!(wait_until_dead(pid, TIMEOUT), "timeout child survived its job close");
+}
+
+#[test]
+fn host_with_a_malformed_url_line_errors_and_is_reclaimed() {
+    let mut supervisor = supervisor("malformed-url");
+    let error = spawn_supervised(&mut supervisor, "host-malformed-url").unwrap_err();
+    assert!(
+        matches!(error, DesktopError::MalformedUrl(_)),
+        "expected a malformed-url error, got {error:?}"
+    );
+    let pid = supervisor.owned_pid().expect("the malformed host was spawned");
+    assert!(wait_until_dead(pid, TIMEOUT), "malformed-url child survived its job close");
+}
+
+#[test]
+fn host_with_an_incompatible_identity_fails_readiness_and_is_reclaimed() {
+    let mut supervisor = supervisor("identity-mismatch");
+    let error = spawn_supervised(&mut supervisor, "host-identity-mismatch").unwrap_err();
+    assert!(
+        matches!(error, DesktopError::ReadinessTimeout(_))
+            || matches!(error, DesktopError::Readiness(_)),
+        "expected a readiness failure, got {error:?}"
+    );
+    let pid = supervisor.owned_pid().expect("the mismatched host was spawned");
+    assert!(wait_until_dead(pid, TIMEOUT), "identity-mismatch child survived its job close");
 }

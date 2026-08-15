@@ -437,6 +437,15 @@ pub struct OwnedProcess {
     reaped: bool,
 }
 
+impl core::fmt::Debug for OwnedProcess {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("OwnedProcess")
+            .field("pid", &self.pid)
+            .field("reaped", &self.reaped)
+            .finish_non_exhaustive()
+    }
+}
+
 impl OwnedProcess {
     /// Spawn `command` with `args`, contain it in a kill-on-close job with its
     /// stdio on inherited pipes, and resume it.
