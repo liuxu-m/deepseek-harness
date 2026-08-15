@@ -672,6 +672,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "thiserror 2.0.20",
+ "windows",
 ]
 
 [[package]]

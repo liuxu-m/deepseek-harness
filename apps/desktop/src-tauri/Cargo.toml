@@ -21,3 +21,17 @@ tauri = { version = "2.11.5", features = [] }
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-single-instance = "2.4.3"
 thiserror = "2"
+# windows crate: the native process-tree containment boundary (Task 8). The
+# Win32 feature flags bundle the Job Objects, suspended-process creation, and
+# inherited-pipe APIs used by windows_job alongside the Win32 Foundation and
+# Security types those bindings need. The crate compiles on non-Windows (its
+# Win32 bindings are cfg-out there), so the dependency is unconditional; only
+# the windows_job module that uses it is Windows-gated.
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Console",
+  "Win32_System_JobObjects",
+  "Win32_System_Pipes",
+  "Win32_System_Threading",
+] }
