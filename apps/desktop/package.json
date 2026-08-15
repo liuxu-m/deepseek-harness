@@ -1,0 +1,17 @@
+{
+  "name": "@deepseek-ai/dsh-desktop",
+  "version": "0.1.0-rc.5",
+  "private": true,
+  "type": "module",
+  "files": ["src-tauri", "static", "icons"],
+  "dependencies": {
+    "@deepseek-ai/dsh": "workspace:^"
+  },
+  "scripts": {
+    "cargo:test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "tauri:build": "cargo tauri build --config src-tauri/tauri.conf.json"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

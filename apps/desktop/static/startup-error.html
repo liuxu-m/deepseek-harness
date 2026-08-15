@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DeepSeek Harness — Startup problem</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --ink: #1c2330;
+      --muted: #667085;
+      --accent: #2b59ff;
+      --danger: #d92d20;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid #e4e7ec;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
+      padding: 32px;
+      max-width: 520px;
+      width: 100%;
+    }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--danger);
+      background: #fee4e2;
+      border-radius: 999px;
+      padding: 3px 10px;
+      margin-bottom: 16px;
+    }
+    p.detail { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 24px; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    button {
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+    .primary {
+      background: var(--accent);
+      color: #ffffff;
+    }
+    .ghost {
+      background: var(--card);
+      color: var(--ink);
+      border-color: #d0d5dd;
+    }
+    .danger {
+      background: var(--card);
+      color: var(--danger);
+      border-color: #fecdca;
+    }
+    #messages { margin-top: 16px; font-size: 13px; color: var(--muted); min-height: 18px; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <span class="badge">Startup error</span>
+    <h1 id="title">DeepSeek Harness could not start</h1>
+    <p id="detail" class="detail">The desktop host hit a problem while starting. Retry, or inspect the logs to diagnose it.</p>
+    <div class="actions">
+      <button id="retry" class="primary" type="button">Retry</button>
+      <button id="open-logs" class="ghost" type="button">Open logs</button>
+      <button id="exit" class="danger" type="button">Exit</button>
+    </div>
+    <div id="messages" role="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+    function readParam(name, fallback) {
+      try {
+        const value = new URLSearchParams(window.location.search).get(name);
+        return value == null ? fallback : value;
+      } catch (_err) {
+        return fallback;
+      }
+    }
+
+    // Assigning to textContent (never innerHTML) escapes any markup in
+    // query-provided title/detail, so it can never inject into this page.
+    document.getElementById("title").textContent = readParam("title", "DeepSeek Harness could not start");
+    document.getElementById("detail").textContent = readParam("detail", "The desktop host hit a problem while starting. Retry, or inspect the logs to diagnose it.");
+
+    const messages = document.getElementById("messages");
+    const isTauri = typeof window.__TAURI_INTERNALS__ !== "undefined";
+
+    const hasBridge = isTauri && typeof window.__TAURI_INTERNALS__.invoke === "function";
+
+    function call(command, args) {
+      // Prefer the Tauri invoke bridge; fall back to a no-op message so the
+      // page is still usable when previewed in a plain browser.
+      if (!hasBridge) {
+        messages.textContent = "Desktop bridge unavailable.";
+        return Promise.resolve();
+      }
+      return window.__TAURI_INTERNALS__.invoke(command, args);
+    }
+
+    document.getElementById("retry").addEventListener("click", function () {
+      call("startup_error_reset").then(function () { messages.textContent = "Retrying…"; });
+    });
+    document.getElementById("open-logs").addEventListener("click", function () {
+      call("startup_error_open_logs").then(function () { messages.textContent = "Opened the log directory."; });
+    });
+    document.getElementById("exit").addEventListener("click", function () {
+      call("startup_error_exit");
+    });
+  </script>
+</body>
+</html>
