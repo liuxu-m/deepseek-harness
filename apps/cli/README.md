@@ -44,7 +44,7 @@ The [CLI behavior reference](reference/README.md) owns exact layer precedence, f
 
 ## Parent shutdown
 
-A parent shell can own the CLI's graceful shutdown instead of relying on signals: when launched with `DSH_PARENT_CONTROL=stdin-v1`, the CLI reads one shutdown frame from its inherited stdin and requests the same graceful drain a `SIGTERM` triggers. The Tauri desktop shell writes `{"type":"shutdown","protocol":1}\n` to the child's stdin to stop the host. A non-empty value other than `stdin-v1` fails before boot so a typo cannot silently disable desktop shutdown.
+A parent shell can own the CLI's graceful shutdown instead of relying on signals: when launched with `DSH_PARENT_CONTROL=stdin-v1`, the CLI reads one shutdown frame from its inherited stdin and requests the same graceful tree disposal a `SIGTERM` triggers. Unlike a signal, the parent frame completes naturally via `shutdown(0)` rather than going through `interrupt(0)`: both dispose the tree gracefully, but the frame signals a natural completion rather than an explicit exit. The Tauri desktop shell writes `{"type":"shutdown","protocol":1}\n` to the child's stdin to stop the host. A non-empty value other than `stdin-v1` fails before boot so a typo cannot silently disable desktop shutdown.
 
 ## Development
 

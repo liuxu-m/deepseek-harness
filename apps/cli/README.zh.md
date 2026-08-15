@@ -44,7 +44,7 @@ profile 目录包含一个 `package.json`，其中记录树外插件依赖，以
 
 ## 父进程关闭
 
-父外壳可以不依赖信号，而通过自己的通道来请求 CLI 优雅关闭：当以 `DSH_PARENT_CONTROL=stdin-v1` 启动时，CLI 会从其继承的 stdin 读取一个关闭帧，并触发与 `SIGTERM` 相同的优雅排空流程。Tauri 桌面外壳通过向子进程 stdin 写入 `{"type":"shutdown","protocol":1}\n` 来停止宿主机。非空且不等于 `stdin-v1` 的值会在启动前失败，以免拼写错误悄然禁用桌面关闭。
+父外壳可以不依赖信号，而通过自己的通道来请求 CLI 优雅关闭：当以 `DSH_PARENT_CONTROL=stdin-v1` 启动时，CLI 会从其继承的 stdin 读取一个关闭帧，并触发与 `SIGTERM` 相同的优雅树回收流程。与信号不同，父进程帧通过 `shutdown(0)` 自然完成，而不是走 `interrupt(0)`：两者都会优雅地回收整棵树，但该帧表示的是自然完成而非显式退出。Tauri 桌面外壳通过向子进程 stdin 写入 `{"type":"shutdown","protocol":1}\n` 来停止宿主机。非空且不等于 `stdin-v1` 的值会在启动前失败，以免拼写错误悄然禁用桌面关闭。
 
 ## 开发
 

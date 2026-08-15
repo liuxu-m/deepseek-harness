@@ -48,6 +48,21 @@ describe('installParentControl', () => {
     await vi.waitFor(() => expect(failure).toHaveBeenCalledOnce())
   })
 
+  it('accepts an exactly-at-boundary frame', async () => {
+    const input = new PassThrough()
+    const shutdown = fakeShutdown()
+    installParentControl(input, shutdown)
+    // Pad the shutdown JSON with a harmless extra field so the frame's total
+    // byte length, trailing \n included, lands exactly on the accepted bound.
+    const pad = 'x'.repeat(
+      PARENT_CONTROL_MAX_BYTES - Buffer.byteLength('{"type":"shutdown","protocol":1,"pad":""}\n'),
+    )
+    const frame = `{"type":"shutdown","protocol":1,"pad":"${pad}"}\n`
+    expect(Buffer.byteLength(frame)).toBe(PARENT_CONTROL_MAX_BYTES)
+    input.end(frame)
+    await vi.waitFor(() => expect(shutdown.shutdown).toHaveBeenCalledExactlyOnceWith(0))
+  })
+
   it('is inert on EOF without a frame', async () => {
     const input = new PassThrough()
     const shutdown = fakeShutdown()
@@ -85,11 +100,8 @@ describe('installParentControl', () => {
 
 /** Drop trailing process listeners so a test leaves no global handlers behind. */
 function trimProcessListeners(event: 'SIGTERM' | 'SIGINT' | 'unhandledRejection', keep: number): void {
-  const emitter = process as Pick<NodeJS.EventEmitter, 'listeners' | 'listenerCount' | 'removeListener'>
-  const listeners = emitter.listeners(event)
-  while (emitter.listenerCount(event) > keep) {
-    emitter.removeListener(event, listeners.pop()! as Parameters<typeof emitter.removeListener>[1])
-  }
+  const listeners = event === 'unhandledRejection' ? process.listeners('unhandledRejection') : process.listeners(event)
+  while (listeners.length > keep) process.removeListener(event, listeners.pop()!)
 }
 
 describe('runProfile parent-control ordering', () => {
