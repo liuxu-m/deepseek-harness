@@ -32,6 +32,12 @@ const SOURCE_ROOT = fileURLToPath(new URL('../../../..', import.meta.url))
 /** Runtime service that releases Web rows after bind-dependent values resolve. */
 const WEB_RUNTIME_SERVICE = 'webRuntime'
 
+/**
+ * System-level image capability flag: a named seam that host-side checks read
+ * instead of the literal string.
+ */
+export const GLOBAL_IMAGE_SERVICE = 'globalImage' as const
+
 /** Services required before the web runtime can mount. */
 export const inject = ['webServer']
 
@@ -148,7 +154,7 @@ export function apply(ctx: Context, config: Config): void {
   // System-level image capability: the single source of truth the host-side
   // image admission, strip, and read_image gates read. Off by default; the Web
   // profile patch turns it on.
-  ctx.provide('globalImage', config.globalImage)
+  ctx.provide(GLOBAL_IMAGE_SERVICE, config.globalImage)
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
   if (config.surfaceContext) {
     ctx.inject(['systemPrompt'], (promptCtx) => {
