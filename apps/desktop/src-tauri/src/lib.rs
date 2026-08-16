@@ -171,6 +171,12 @@ fn run_initial_startup(
             build_main_window(app, live, origin.clone(), external_opener(app)).map_err(Into::into)
         }
         Err(error) => {
+            // Record the startup failure in the desktop log before showing the
+            // error page: the page carries only a summary, so the log is the
+            // only place the full reason survives.
+            if let Ok(mut supervisor) = supervisor.lock() {
+                supervisor.log_startup_error(&error);
+            }
             let (title, detail) = startup_error_texts(&error, &paths.logs);
             let page = crate::window::startup_error_url(&title, &detail);
             // WebView creation may itself be impossible (e.g. the WebView2

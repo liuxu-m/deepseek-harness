@@ -172,8 +172,22 @@ impl HostSupervisor {
 
     /// Run `discover_default` and then establish the session it implies.
     pub fn start(&mut self) -> Result<String, DesktopError> {
-        let discovery = crate::discovery::discover_default()?;
+        let discovery = match crate::discovery::discover_default() {
+            Ok(discovery) => discovery,
+            Err(error) => {
+                self.desktop_log
+                    .event("discovery", &format!("outcome=error {error}"));
+                return Err(error.into());
+            }
+        };
         self.start_from(&discovery)
+    }
+
+    /// Record a startup failure in the desktop log so the full reason survives
+    /// even when the error page cannot be shown or carries only a summary.
+    pub fn log_startup_error(&mut self, error: &DesktopError) {
+        self.desktop_log
+            .event("startup", &format!("outcome=error {error}"));
     }
 
     /// Establish the session implied by `discovery`. `Attach` merely holds the
@@ -213,6 +227,13 @@ impl HostSupervisor {
         );
         let cwd = self.paths.cwd.clone();
         let env = production_env(&self.paths);
+        self.desktop_log.event(
+            "spawn",
+            &format!(
+                "command=\"{command}\" args={args} cwd={} port={port}",
+                cwd.display()
+            ),
+        );
         let base_url = self.spawn_with(&command, &args, Some(&cwd), Some(&env))?;
         Ok(base_url)
     }
@@ -263,7 +284,14 @@ impl HostSupervisor {
         cwd: Option<&Path>,
         env: Option<&[(String, String)]>,
     ) -> Result<OwnedReady, DesktopError> {
-        let mut process = OwnedProcess::spawn(command, args, cwd, env).map_err(DesktopError::Spawn)?;
+        let mut process = match OwnedProcess::spawn(command, args, cwd, env) {
+            Ok(process) => process,
+            Err(error) => {
+                self.desktop_log
+                    .event("spawn", &format!("outcome=error {error}"));
+                return Err(DesktopError::Spawn(error));
+            }
+        };
         let child_pid = process.pid();
         self.owned_pid = Some(child_pid);
         self.desktop_log.event("spawn", &format!("pid={child_pid}"));
