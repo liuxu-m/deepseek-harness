@@ -1,6 +1,7 @@
 /** Desktop portable archive assembly: node carrier, staging, scans, and zip determinism. */
 
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -161,6 +162,14 @@ describe('portable build plan', () => {
       { command: 'pnpm', args: ['--filter', '@deepseek-ai/dsh-desktop', 'exec', 'tauri', 'build', '--no-bundle'] },
       { command: 'pnpm', args: ['run', 'desktop:runtime', '--', '--out', 'dist/desktop/runtime'] },
     ])
+  })
+})
+
+describe('msvc toolchain pin', () => {
+  it('pins the MSVC host toolchain for tauri builds on Windows', () => {
+    const source = readFileSync(join(REPO_ROOT, 'scripts/release/build-desktop-portable.ts'), 'utf8')
+    expect(source).toContain("RUSTUP_TOOLCHAIN: 'stable-x86_64-pc-windows-msvc'")
+    expect(source).toContain("process.platform === 'win32'")
   })
 })
 

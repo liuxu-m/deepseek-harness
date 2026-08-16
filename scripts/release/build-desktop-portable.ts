@@ -723,7 +723,17 @@ async function run(label: string, command: string, args: readonly string[]): Pro
     const child = spawn(command, [...args], {
       cwd: commandRoot,
       stdio: 'inherit',
-      env: { ...process.env, CI: 'true' },
+      env: {
+        ...process.env,
+        CI: 'true',
+        // The desktop EXE must link the MSVC runtime: the GNU toolchain (the
+        // rustup default on Windows) produces a binary that depends on MinGW
+        // runtime DLLs absent from target machines. Pin the MSVC host
+        // toolchain so a rustup default cannot silently change the ABI.
+        ...(process.platform === 'win32'
+          ? { RUSTUP_TOOLCHAIN: 'stable-x86_64-pc-windows-msvc' }
+          : {}),
+      },
     })
     child.once('error', (error) => {
       reject(new Error(`build-desktop-portable: ${label} failed to spawn: ${error.message} (${printable})`))
