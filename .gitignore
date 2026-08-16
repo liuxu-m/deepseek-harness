@@ -34,6 +34,7 @@ apps/web/dist/
 desktop/dist/
 desktop/logs/
 desktop/.npm_cache/
+dist/desktop/
 .artifacts/
 .playwright-mcp/
 .orig

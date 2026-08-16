@@ -1,0 +1,5 @@
+{
+  "version": "v24.11.1",
+  "archive": "node-v24.11.1-win-x64.zip",
+  "baseUrl": "https://nodejs.org/dist/v24.11.1"
+}
