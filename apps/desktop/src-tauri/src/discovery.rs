@@ -171,17 +171,56 @@ fn judge_response(url: &str, response: &[u8]) -> Result<Discovery, DiscoveryErro
     if !successful_status(head) {
         return Ok(Discovery::StartDynamic);
     }
-    let identity: RuntimeIdentity = match serde_json::from_str(body) {
+    // The bundled web host answers with `Transfer-Encoding: chunked` (Node's
+    // default for a streaming body), so the body may carry chunk-size lines
+    // around the JSON payload. Decode it before parsing the identity.
+    let body = if head.to_ascii_lowercase().contains("transfer-encoding: chunked") {
+        decode_chunked(body)
+    } else {
+        body.to_string()
+    };
+    let identity: RuntimeIdentity = match serde_json::from_str(&body) {
         Ok(identity) => identity,
         Err(_) => return Ok(Discovery::StartDynamic),
     };
     if !compatible(&identity) {
         return Ok(Discovery::StartDynamic);
     }
+    // The attach URL is the loopback origin, never the probed identity path:
+    // the supervisor uses it as the window/HTTP base URL.
+    let (port, _) = parse_loopback_identity_url(url)?;
     Ok(Discovery::Attach {
-        base_url: url.to_string(),
+        base_url: format!("http://{LOOPBACK_HOST}:{port}"),
         identity,
     })
+}
+
+/// Decode an HTTP/1.1 chunked-transfer body: `SIZE\r\n<data>\r\n...0\r\n\r\n`.
+/// A malformed or incomplete chunk stream yields an empty string, which the
+/// caller's JSON parse rejects as unverified.
+fn decode_chunked(body: &str) -> String {
+    let mut out = String::new();
+    let mut rest = body;
+    loop {
+        let (size_line, remainder) = match rest.split_once("\r\n") {
+            Some(pair) => pair,
+            None => return String::new(),
+        };
+        // The size may be followed by `;extensions`; take the hex before them.
+        let size_text = size_line.split(';').next().unwrap_or("").trim();
+        let size = match usize::from_str_radix(size_text, 16) {
+            Ok(size) => size,
+            Err(_) => return String::new(),
+        };
+        if size == 0 {
+            return out;
+        }
+        if remainder.len() < size + 2 {
+            return String::new();
+        }
+        out.push_str(&remainder[..size]);
+        rest = &remainder[size + 2..];
+    }
 }
 
 /// Return true when the status line carries a 2xx status code.

@@ -69,13 +69,33 @@ impl DesktopPaths {
     /// Derive `DesktopPaths` from the running process and the Tauri app's
     /// resolved user directories. Fails loud rather than degrading to the
     /// current directory when a user root cannot be resolved.
+    ///
+    /// On Windows the home prefers the `USERPROFILE` environment variable over
+    /// the Known Folder API: the bundled Node host resolves its home from
+    /// `USERPROFILE` (`os.homedir()`), so the desktop must derive the same
+    /// root for the shared `DSH_HOME` to classify as the default home. The
+    /// Known Folder `FOLDERID_Profile` ignores the environment variable and
+    /// would diverge whenever a caller overrides `USERPROFILE` (e.g. an
+    /// isolated profile in acceptance smoke).
     pub fn from_environment(app: &tauri::AppHandle) -> Result<Self, DesktopPathsError> {
         let exe = std::env::current_exe().map_err(DesktopPathsError::ExecutableUnresolved)?;
+        #[cfg(windows)]
+        let home = match std::env::var_os("USERPROFILE").filter(|value| !value.is_empty()) {
+            Some(value) => PathBuf::from(value),
+            None => app.path().home_dir().map_err(|_| DesktopPathsError::HomeUnresolved)?,
+        };
+        #[cfg(not(windows))]
         let home = app.path().home_dir().map_err(|_| DesktopPathsError::HomeUnresolved)?;
         let local_app_data = app
             .path()
             .local_data_dir()
             .map_err(|_| DesktopPathsError::LocalAppDataUnresolved)?;
+        eprintln!(
+            "dsh-desktop: paths exe={} home={} local_app_data={}",
+            exe.display(),
+            home.display(),
+            local_app_data.display()
+        );
         Self::from_roots(&exe, &home, &local_app_data)
     }
 }

@@ -205,9 +205,11 @@ impl HostSupervisor {
     fn spawn_default(&mut self, port: u16) -> Result<String, DesktopError> {
         let command = self.paths.node.to_string_lossy().into_owned();
         let bin = runtime_bin(&self.paths);
+        // The bin path is quoted so a portable extraction root containing
+        // spaces or CJK characters survives CreateProcessW's argv[0] parsing.
         let args = format!(
-            "{} {HOST_HEADLESS_ARGS} {port}",
-            bin.to_string_lossy()
+            "\"{}\" {HOST_HEADLESS_ARGS} {port}",
+            bin.to_string_lossy().replace('"', "\"\"")
         );
         let cwd = self.paths.cwd.clone();
         let env = production_env(&self.paths);

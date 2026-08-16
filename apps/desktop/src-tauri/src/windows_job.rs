@@ -333,6 +333,11 @@ fn build_env_block(env: Option<&[(String, String)]>) -> Option<Vec<u16>> {
 /// Spawn `command` with `args` suspended, wiring the inherited pipes as its
 /// standard I/O. The child runs detached (`CREATE_NO_WINDOW`) and, when `env` is
 /// supplied, receives it through `CREATE_UNICODE_ENVIRONMENT`.
+///
+/// The command line starts with the quoted `command` path so the child's
+/// `argv[0]` is the executable itself (CreateProcessW derives `argv[0]` from
+/// the first command-line token even when `lpApplicationName` is set); a bare
+/// `args` that begins with a script path would misalign every argument.
 pub fn create_process_suspended(
     command: &str,
     args: &str,
@@ -343,7 +348,8 @@ pub fn create_process_suspended(
     let mut application: Vec<u16> = command.encode_utf16().collect();
     application.push(0);
 
-    let mut command_line: Vec<u16> = args.encode_utf16().collect();
+    let command_line_text = format!("\"{}\" {}", command.replace('"', "\"\""), args);
+    let mut command_line: Vec<u16> = command_line_text.encode_utf16().collect();
     command_line.push(0);
 
     let env_block = build_env_block(env);
