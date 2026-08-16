@@ -34,6 +34,10 @@ pnpm run build
 pnpm dsh web
 ```
 
+### Windows desktop
+
+A portable Windows desktop distribution (Tauri 2 + WebView2) is built from this repository. See the [desktop package reference](apps/desktop/README.md) for the supported baseline, archive layout, build commands, and the packaged acceptance smoke.
+
 ## Community and support
 
 - Feel free to submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).

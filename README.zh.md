@@ -34,6 +34,10 @@ pnpm run build
 pnpm dsh web
 ```
 
+### Windows 桌面版
+
+本仓库还构建一个便携式 Windows 桌面发行版（Tauri 2 + WebView2）。受支持基线、归档布局、构建命令和打包验收冒烟参见[桌面包参考](apps/desktop/README.md)。
+
 ## 社区与支持
 
 - 欢迎通过 [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions) 提交反馈或 bug 报告。
