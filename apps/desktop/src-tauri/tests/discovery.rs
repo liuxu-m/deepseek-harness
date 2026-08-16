@@ -20,6 +20,11 @@ fn identity_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}{IDENTITY_PATH}")
 }
 
+/// The loopback origin of `identity_url`, which attach reports as its base URL.
+fn identity_origin(port: u16) -> String {
+    format!("http://127.0.0.1:{port}")
+}
+
 /// A minimal valid identity body for a fixture instance.
 fn compatible_identity(instance_id: &str, home_kind: &str) -> String {
     format!(
@@ -47,6 +52,8 @@ enum Responder {
     TooLarge,
     /// Accepts the connection but never responds.
     Timeout,
+    /// A compatible identity in a chunked-transfer body (Node's default).
+    Chunked,
 }
 
 /// Write `status` and `body` to `sock` as a `Connection: close` HTTP response.
@@ -57,6 +64,16 @@ fn respond(sock: &mut TcpStream, status: &str, body: &str) {
     );
     let _ = sock.write_all(header.as_bytes());
     let _ = sock.write_all(body.as_bytes());
+    let _ = sock.flush();
+}
+
+/// Write a chunked-transfer identity response, exactly like the Node host.
+fn respond_chunked(sock: &mut TcpStream, body: &str) {
+    let header = format!(
+        "{HEAD} 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n"
+    );
+    let _ = sock.write_all(header.as_bytes());
+    let _ = sock.write_all(format!("{:x}\r\n{body}\r\n0\r\n\r\n", body.len()).as_bytes());
     let _ = sock.flush();
 }
 
@@ -81,6 +98,7 @@ fn serve(mode: Responder) -> String {
             Responder::Redirect => respond(&mut sock, "302 Found", ""),
             Responder::NonDsh => respond(&mut sock, "200 OK", r#"{"hello":"world"}"#),
             Responder::TooLarge => respond(&mut sock, "200 OK", &"x".repeat(8192)),
+            Responder::Chunked => respond_chunked(&mut sock, &compatible_identity("fixture-chunked", "default")),
             Responder::Timeout => {
                 // Hold the connection open without writing anything so the
                 // client's read times out.
@@ -107,15 +125,35 @@ fn refused_url() -> String {
 #[test]
 fn attaches_to_a_compatible_host() {
     let url = serve(Responder::Compatible);
+    let port = url.rsplit(':').next().unwrap().split('/').next().unwrap().parse::<u16>().unwrap();
     assert_eq!(
         discover(&url).unwrap(),
         Discovery::Attach {
-            base_url: url,
+            base_url: identity_origin(port),
             identity: RuntimeIdentity {
                 product: "deepseek-harness".into(),
                 desktop_protocol: 1,
                 version: "0.1.0-test".into(),
                 instance_id: "fixture-instance".into(),
+                home_kind: HomeKind::Default,
+            },
+        }
+    );
+}
+
+#[test]
+fn attaches_to_a_chunked_host_like_the_node_web_server() {
+    let url = serve(Responder::Chunked);
+    let port = url.rsplit(':').next().unwrap().split('/').next().unwrap().parse::<u16>().unwrap();
+    assert_eq!(
+        discover(&url).unwrap(),
+        Discovery::Attach {
+            base_url: identity_origin(port),
+            identity: RuntimeIdentity {
+                product: "deepseek-harness".into(),
+                desktop_protocol: 1,
+                version: "0.1.0-test".into(),
+                instance_id: "fixture-chunked".into(),
                 home_kind: HomeKind::Default,
             },
         }

@@ -20,8 +20,12 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use deepseek_harness_desktop_lib::identity::{HomeKind, RuntimeIdentity};
+use deepseek_harness_desktop_lib::instance::InstanceQueue;
 use deepseek_harness_desktop_lib::paths::DesktopPaths;
 use deepseek_harness_desktop_lib::supervisor::{DesktopError, HostSupervisor, ShutdownOutcome};
+use deepseek_harness_desktop_lib::window::{
+    AppSupervisorPort, DesktopController, ExitPort, OpenerPort, SupervisorPort, WindowPort,
+};
 use deepseek_harness_desktop_lib::windows_job::{
     create_kill_on_close_job, create_process_suspended, assign_to_job, InheritedPipes,
     OwnedProcess, Win32Procs,
@@ -627,4 +631,135 @@ fn host_with_an_incompatible_identity_fails_readiness_and_is_reclaimed() {
     );
     let pid = supervisor.owned_pid().expect("the mismatched host was spawned");
     assert!(wait_until_dead(pid, TIMEOUT), "identity-mismatch child survived its job close");
+}
+
+// ---------------------------------------------------------------------------
+// Real DesktopController over a real supervisor and child (tray Exit path).
+// ---------------------------------------------------------------------------
+
+/// A no-op window port for controller tests: only the supervisor shutdown and
+/// the exit code are observable here.
+#[derive(Default)]
+struct NoopWindow;
+
+impl WindowPort for NoopWindow {
+    fn hide(&self) {}
+    fn show(&self) {}
+    fn unminimize(&self) {}
+    fn set_focus(&self) {}
+    fn navigate_live(&self, _base_url: &str) {}
+}
+
+/// A no-op opener port for controller tests.
+#[derive(Default)]
+struct NoopOpener;
+
+impl OpenerPort for NoopOpener {
+    fn open_url(&self, _url: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn open_path(&self, _path: &str) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// A recording exit port shared by reference so the test can inspect the code.
+#[derive(Clone, Default)]
+struct RecordExit {
+    code: std::sync::Arc<std::sync::Mutex<Option<i32>>>,
+}
+
+impl RecordExit {
+    fn code(&self) -> Option<i32> {
+        *self.code.lock().unwrap()
+    }
+}
+
+impl ExitPort for RecordExit {
+    fn exit(&self, code: i32) {
+        *self.code.lock().unwrap() = Some(code);
+    }
+}
+
+/// A supervisor shared behind the same `Arc<Mutex<_>>` the production
+/// `AppSupervisorPort` wraps, so the tray Exit path drives the real bounded
+/// shutdown against a real child.
+fn shared_supervisor(tag: &str) -> std::sync::Arc<std::sync::Mutex<HostSupervisor>> {
+    std::sync::Arc::new(std::sync::Mutex::new(supervisor(tag)))
+}
+
+#[test]
+fn controller_exit_shuts_down_a_real_owned_host_before_exiting() {
+    let supervisor = shared_supervisor("controller-exit");
+    let url = {
+        let mut supervisor = supervisor.lock().unwrap();
+        spawn_supervised(&mut supervisor, "host-graceful").unwrap()
+    };
+    assert!(
+        url.starts_with("http://127.0.0.1:"),
+        "expected a loopback URL, got {url}"
+    );
+    let pid = supervisor
+        .lock()
+        .unwrap()
+        .owned_pid()
+        .expect("an owned host is running");
+
+    let exit = RecordExit::default();
+    let mut controller = DesktopController::new(
+        Box::new(NoopWindow::default()),
+        Box::new(NoopOpener::default()),
+        Box::new(AppSupervisorPort::new(supervisor.clone())),
+        Box::new(exit.clone()),
+        std::sync::Arc::new(std::sync::Mutex::new(InstanceQueue::new())),
+    );
+
+    assert_eq!(controller.exit(), 0, "tray Exit must report success");
+    assert!(
+        wait_until_dead(pid, TIMEOUT),
+        "the owned host survived tray Exit"
+    );
+    assert_eq!(
+        exit.code(),
+        Some(0),
+        "tray Exit must ask the app to exit only after the host shutdown"
+    );
+}
+
+#[test]
+fn controller_exit_detaches_an_attached_host_without_touching_a_process() {
+    let supervisor = shared_supervisor("controller-attached");
+    let url = supervisor
+        .lock()
+        .unwrap()
+        .start_from(&Discovery::Attach {
+            base_url: "http://127.0.0.1:3080".into(),
+            identity: compatible_identity_typed(),
+        })
+        .unwrap();
+    assert_eq!(url, "http://127.0.0.1:3080");
+    // An attached host is external; the controller Exit must detach it without
+    // ever claiming a process to kill.
+    assert_eq!(
+        supervisor.lock().unwrap().owned_pid(),
+        None,
+        "attach must never spawn a process"
+    );
+
+    let exit = RecordExit::default();
+    let mut controller = DesktopController::new(
+        Box::new(NoopWindow::default()),
+        Box::new(NoopOpener::default()),
+        Box::new(AppSupervisorPort::new(supervisor.clone())),
+        Box::new(exit.clone()),
+        std::sync::Arc::new(std::sync::Mutex::new(InstanceQueue::new())),
+    );
+
+    assert_eq!(controller.exit(), 0);
+    assert_eq!(
+        supervisor.lock().unwrap().owned_pid(),
+        None,
+        "an attached host must never be owned or terminated"
+    );
+    assert_eq!(exit.code(), Some(0));
 }
