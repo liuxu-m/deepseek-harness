@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { materializeStagedLinks, planDesktopRuntime, REPO_ROOT, restoreLegacyHoists, validateDeployedRuntime } from './build-desktop-runtime.ts'
 
 const VERSION = '0.1.0-rc.5'
@@ -14,8 +14,9 @@ async function makeFixture(): Promise<{ root: string; stage: string; dir: string
   const root = join(dir, 'repo')
   const stage = join(dir, 'stage')
   const write = (path: string, content: string) => {
-    const directory = path.slice(0, path.lastIndexOf('\\'))
-    return mkdir(directory, { recursive: true }).then(() => writeFile(path, content))
+    // `dirname` keeps the fixture portable: `join()` yields `/` separators on
+    // POSIX and `\` on Windows, so a literal backslash split would mis-parent.
+    return mkdir(dirname(path), { recursive: true }).then(() => writeFile(path, content))
   }
   await write(
     join(root, 'package.json'),
@@ -47,9 +48,8 @@ async function createDirLink(target: string, linkPath: string): Promise<void> {
 
 describe('desktop runtime deploy plan', () => {
   it('orders build, closure verification, then a production desktop deploy', () => {
-    const root = 'C:/repo'
     const stage = 'C:/repo/dist/desktop/runtime'
-    expect(planDesktopRuntime({ root, stage })).toEqual([
+    expect(planDesktopRuntime({ stage })).toEqual([
       { command: 'pnpm', args: ['run', 'build'] },
       { command: 'pnpm', args: ['run', 'verify-runtime-closure', '--manifest', 'apps/desktop/package.json'] },
       {

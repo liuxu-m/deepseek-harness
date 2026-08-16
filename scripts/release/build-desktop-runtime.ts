@@ -49,8 +49,6 @@ export const REPO_ROOT = resolve(import.meta.dirname, '..', '..')
 
 /** Inputs to the pure deploy-plan function. */
 export interface DesktopRuntimePlanInput {
-  /** The repository root. */
-  readonly root: string
   /** The absolute deploy target directory. */
   readonly stage: string
 }
@@ -285,6 +283,13 @@ export async function restoreLegacyHoists(root: string, stage: string): Promise<
     })
     restored.push(dependency)
   }
+  const stillMissing = Object.keys(manifest.dependencies ?? {})
+    .filter(dependency => !existsSync(join(stage, 'node_modules', dependency)))
+  if (stillMissing.length > 0) {
+    throw new Error(
+      `build-desktop-runtime: staged dependencies remain missing: ${stillMissing.join(', ')}.`,
+    )
+  }
   if (restored.length > 0) {
     console.log(`build-desktop-runtime: restored legacy deploy hoists: ${restored.join(', ')}`)
   }
@@ -294,7 +299,10 @@ export async function restoreLegacyHoists(root: string, stage: string): Promise<
 async function runPlan(plan: readonly PlannedCommand[]): Promise<void> {
   for (const step of plan) {
     const command = step.command === 'pnpm' ? pnpmInvocation(step.args) : { command: step.command, args: [...step.args] }
-    await run(step.args[0] ?? step.command, command.command, command.args)
+    // The label names the action: `pnpm run build` -> "build", `pnpm run
+    // verify-...` -> "verify-...", `pnpm --filter ... deploy ...` -> "deploy".
+    const action = step.args[0] === 'run' ? step.args[1] ?? 'run' : step.args[0] === '--filter' ? 'deploy' : step.args[0]
+    await run(action ?? step.command, command.command, command.args)
   }
 }
 
@@ -319,7 +327,7 @@ async function main(): Promise<void> {
   assertStageSafe(root, stage)
   // pnpm deploy is refused on a non-empty target; clear any prior staging first.
   await rm(stage, { recursive: true, force: true })
-  await runPlan(planDesktopRuntime({ root, stage }))
+  await runPlan(planDesktopRuntime({ stage }))
   await restoreLegacyHoists(root, stage)
   await materializeStagedLinks(stage)
   await validateDeployedRuntime(root, stage)
