@@ -4,6 +4,14 @@ English | [中文](README.zh.md)
 
 The dsh browser-surface bundle. [`cordis.patch.yml`](cordis.patch.yml) rides over [`dsh-base`](../base/README.md): it sets the coding persona, inserts the Web host rows (webserver, API gateway, workspace, projection cache, storage) and the browser plugin roster, the always-on client-plugin reload chain ([`dsh-client-hmr`](../../client/hmr/README.md), idle until a rebuild watcher rewrites client bundles), and mounts this package's `web-runtime` glue plugin (config `{printUrl, surfaceContext, trustedHosts, globalImage}`). That plugin resolves the built frontend dist through `@deepseek-ai/dsh-web-frontend`'s exports, samples bind-dependent LAN trust once, provides it as `webRuntime` to the browser-trust fence and client roster, mounts the [`frontend-static`](../../host/frontend-static/README.md) fallback owner, registers the harness-source and web-surface prompt sections plus the bash-visible `DSH_WEB_URL` runtime variable when `surfaceContext` is true, and prints the `dsh web:` URL line when `printUrl` is true, after its Loader tree settles so a sibling failure cannot announce a dead app. This bundle also owns the app command line: the ordinary `web-startup` provider ([`src/startup.ts`](src/startup.ts)) injects `ctx.cmdlineArgs` ([`dsh-cmdline`](../../boot/cmdline/README.md)), parses `--host`, `--port`, repeatable `--trusted-host`, and the app's `--help`, then provides `webStartup`. It rejects `--host 0.0.0.0` before publishing that service because the CLI intentionally does not support all-interfaces binding yet. Flag-configured rows inject the service and read it directly from lazy config, so nothing binds a port before argument resolution and `dsh --profile web --help` starts no server. [`dsh-headless`](../headless/README.md) is a sibling surface over the same base and does not mount this bundle.
 
+## Runtime identity endpoint
+
+`GET /api/runtime.identity` answers `{product, desktopProtocol, version, instanceId, homeKind}`. A companion desktop shell probes it to decide whether to attach to this Web Host or start its own. The fields are non-sensitive: `product` is always `deepseek-harness`, `desktopProtocol` is `1`, `version` is this bundle's package version, `instanceId` is one anonymous UUID per process, and `homeKind` is `default` for the symbolic `~/.dsh` home or `custom` when `$DSH_HOME` overrides it. The route is GET-only (any other method answers 405 with `allow: GET`) and the JSON is `cache-control: no-store`; no absolute Harness home path is ever returned.
+
+## Global image capability (`globalImage`)
+
+`globalImage` is the system-level image capability: when it is on, images upload regardless of the routed model's declared input modalities, and the model never sees the image content — an external vision tool (a user-level agent preset) is expected to interpret it. The `web-runtime` plugin provides it as the `globalImage` service, the single source of truth that the host-side image admission, strip, and `read_image` gates read. Its default is false, keeping the existing model-declaration checks (and the strict refusal) unchanged wherever this bundle is not mounted. Under `dsh --profile web` the shipped `web-runtime` patch row sets `globalImage: true`, so the desktop and browser surface enable the capability by default; a user patch layer restores the model-gated behavior by setting it to false.
+
 ## Model Experience
 
 ### Harness-source and Web-surface context
@@ -19,14 +27,6 @@ One source line and one prompt paragraph per session plus two managed-environmen
 #### KV Cache effect
 
 The prompt section sits near the system prompt's head and is stable for the life of the process (the port is a boot fact), so it does not invalidate the cache across turns.
-
-## Runtime identity endpoint
-
-`GET /api/runtime.identity` answers `{product, desktopProtocol, version, instanceId, homeKind}`. A companion desktop shell probes it to decide whether to attach to this Web Host or start its own. The fields are non-sensitive: `product` is always `deepseek-harness`, `desktopProtocol` is `1`, `version` is this bundle's package version, `instanceId` is one anonymous UUID per process, and `homeKind` is `default` for the symbolic `~/.dsh` home or `custom` when `$DSH_HOME` overrides it. The route is GET-only (any other method answers 405 with `allow: GET`) and the JSON is `cache-control: no-store`; no absolute Harness home path is ever returned.
-
-## Global image capability (`globalImage`)
-
-`globalImage` is the system-level image capability: when it is on, images upload regardless of the routed model's declared input modalities, and the model never sees the image content — an external vision tool (a user-level agent preset) is expected to interpret it. The `web-runtime` plugin provides it as the `globalImage` service, the single source of truth that the host-side image admission, strip, and `read_image` gates read. Its default is false, keeping the existing model-declaration checks (and the strict refusal) unchanged wherever this bundle is not mounted. Under `dsh --profile web` the shipped `web-runtime` patch row sets `globalImage: true`, so the desktop and browser surface enable the capability by default; a user patch layer restores the model-gated behavior by setting it to false.
 
 ## Known Limitations and Deferred Work
 

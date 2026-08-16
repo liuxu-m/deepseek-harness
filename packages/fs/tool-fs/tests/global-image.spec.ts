@@ -177,7 +177,7 @@ describe('read_image end-to-end globalImage gate', () => {
     const ctx = await toolContext(false)
     const result = await readImage(ctx, 'text-model')
     expect(result.isError).toBe(true)
-    expect(String(result.error?.message ?? '')).toContain('does not declare image input')
+    expect(result.error?.message ?? '').toContain('does not declare image input')
     await ctx.fiber.dispose()
   })
 })

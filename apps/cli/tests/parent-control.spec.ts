@@ -31,7 +31,7 @@ describe('installParentControl', () => {
     const dispose = installParentControl(input, shutdown)
     input.write('{"type":"shut')
     input.write('down","protocol":1}\n')
-    await vi.waitFor(() => expect(shutdown.shutdown).toHaveBeenCalledExactlyOnceWith(0))
+    await vi.waitFor(() => { expect(shutdown.shutdown).toHaveBeenCalledExactlyOnceWith(0) })
     dispose()
   })
 
@@ -45,7 +45,7 @@ describe('installParentControl', () => {
     const failure = vi.fn()
     installParentControl(input, fakeShutdown(), failure)
     input.end(frame)
-    await vi.waitFor(() => expect(failure).toHaveBeenCalledOnce())
+    await vi.waitFor(() => { expect(failure).toHaveBeenCalledOnce() })
   })
 
   it('accepts an exactly-at-boundary frame', async () => {
@@ -60,7 +60,7 @@ describe('installParentControl', () => {
     const frame = `{"type":"shutdown","protocol":1,"pad":"${pad}"}\n`
     expect(Buffer.byteLength(frame)).toBe(PARENT_CONTROL_MAX_BYTES)
     input.end(frame)
-    await vi.waitFor(() => expect(shutdown.shutdown).toHaveBeenCalledExactlyOnceWith(0))
+    await vi.waitFor(() => { expect(shutdown.shutdown).toHaveBeenCalledExactlyOnceWith(0) })
   })
 
   it('is inert on EOF without a frame', async () => {
@@ -80,7 +80,7 @@ describe('installParentControl', () => {
     installParentControl(input, shutdown)
     input.write('{"type":"shutdown","protocol":1}\n')
     input.write('{"type":"shutdown","protocol":1}\n')
-    await vi.waitFor(() => expect(shutdown.shutdown).toHaveBeenCalledExactlyOnceWith(0))
+    await vi.waitFor(() => { expect(shutdown.shutdown).toHaveBeenCalledExactlyOnceWith(0) })
     // The reader settles on the first newline, so later frames can never
     // shut down a second time; let the event loop drain to be sure.
     await new Promise(resolve => setTimeout(resolve, 20))
@@ -93,7 +93,7 @@ describe('installParentControl', () => {
     const dispose = installParentControl(input, shutdown)
     dispose()
     input.write('{"type":"shutdown","protocol":1}\n')
-    await vi.waitFor(() => expect(input.listenerCount('data')).toBe(0))
+    await vi.waitFor(() => { expect(input.listenerCount('data')).toBe(0) })
     expect(shutdown.shutdown).not.toHaveBeenCalled()
   })
 })
@@ -143,7 +143,7 @@ describe('runProfile parent-control ordering', () => {
       // Loader, so a frame written now — while boot is still pending — must be
       // handled instead of lost in the pre-settle window.
       parentControl.write('{"type":"shutdown","protocol":1}\n')
-      await vi.waitFor(() => expect(shutdown).toHaveBeenCalledExactlyOnceWith(0))
+      await vi.waitFor(() => { expect(shutdown).toHaveBeenCalledExactlyOnceWith(0) })
     } finally {
       bootSpy.mockRestore()
       heal.mockRestore()

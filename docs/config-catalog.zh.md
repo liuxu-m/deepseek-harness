@@ -2886,10 +2886,16 @@ export interface Config {
   surfaceContext: boolean
   /** Explicit `--trusted-host` authorities from this invocation. */
   trustedHosts: string[]
+  /**
+   * System-level image capability: images upload regardless of the routed
+   * model's declared input modalities and are handled by an external vision
+   * tool, not the model itself. The model does not see the image content.
+   */
+  globalImage: boolean
 }
 ```
 
-来源：[`packages/bundle/web-app/src/index.ts:38`](../packages/bundle/web-app/src/index.ts)
+来源：[`packages/bundle/web-app/src/index.ts:45`](../packages/bundle/web-app/src/index.ts)
 
 <a id="deepseek-aidsh-web-fetch-http"></a>
 

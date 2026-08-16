@@ -75,7 +75,10 @@ export const internals: {
   homeKind: env => parseHomeKind(undefined, env),
 }
 
-/** The current identity snapshot, materialized from the internals seam. */
+/**
+ * The current identity snapshot, materialized from the internals seam.
+ * @returns the non-sensitive desktop runtime identity for this process.
+ */
 export function runtimeIdentity(): RuntimeIdentity {
   return {
     product: DSH_RUNTIME_PRODUCT,

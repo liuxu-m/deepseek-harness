@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Cordis, Vitest, Node.js 24, Rust 2021, Tauri 2, WebView2, `windows` crate Win32 process APIs, pnpm deploy, PowerShell integration tests, GitHub Actions Windows runners.
 
-**Design authority:** [Repository-owned Windows desktop host](../../../.agents/notes/proposed/feature/2026-08-14-windows-desktop-host.md) and [Global image on the Web profile](../../../.agents/notes/proposed/feature/2026-08-14-global-image-web-profile.md)
+**Design authority:** [Repository-owned Windows desktop host](../../../.agents/notes/implemented/feature/2026-08-14-windows-desktop-host.md) and [Global image on the Web profile](../../../.agents/notes/implemented/feature/2026-08-14-global-image-web-profile.md)
 
 ---
 
@@ -60,6 +60,9 @@ export const DSH_RUNTIME_IDENTITY_PATH = '/api/runtime.identity' as const
 The Host response:
 
 ```ts
+declare const DSH_RUNTIME_PRODUCT: 'deepseek-harness'
+declare const DSH_DESKTOP_PROTOCOL: 1
+
 export interface RuntimeIdentity {
   product: typeof DSH_RUNTIME_PRODUCT
   desktopProtocol: typeof DSH_DESKTOP_PROTOCOL
@@ -90,7 +93,7 @@ Unknown fields, invalid JSON, frames larger than 1 KiB, protocol other than `1`,
 
 Table-driven tests call the real registered handler and assert exact JSON:
 
-```ts
+```ts ignore-check
 it('serves a non-sensitive identity to GET only', async () => {
   const route = captureRuntimeIdentityRoute({
     version: '0.1.0-test',
@@ -132,7 +135,7 @@ Expected: FAIL because `../src/runtime-identity.ts` does not exist.
 
 - [ ] **Step 3: Implement the identity owner**
 
-```ts
+```ts ignore-check
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -219,7 +222,7 @@ git commit -m "feat(web): expose desktop runtime identity"
 
 Use `PassThrough` streams and fake `ProcessShutdown` methods:
 
-```ts
+```ts ignore-check
 it('requests one graceful shutdown from a fragmented frame', async () => {
   const input = new PassThrough()
   const shutdown = vi.fn(async () => {})
@@ -258,6 +261,8 @@ Expected: FAIL because `parent-control.ts` does not exist.
 
 ```ts
 import { StringDecoder } from 'node:string_decoder'
+
+declare type ProcessShutdown = { shutdown: (code: number) => Promise<void>; interrupt: () => void }
 
 export const PARENT_CONTROL_ENV = 'DSH_PARENT_CONTROL' as const
 export const PARENT_CONTROL_STDIN_V1 = 'stdin-v1' as const
@@ -325,6 +330,12 @@ A second valid frame is rejected because the first newline settles the reader. N
 Extend `RunProfileOptions` with optional `parentControl`. Immediately after `createProcessShutdown`, install the listener and dispose it with the tree. In `bin.ts`:
 
 ```ts
+declare const PARENT_CONTROL_STDIN_V1: 'stdin-v1'
+declare function runProfile(options: unknown): Promise<void>
+declare function loadLayeredEnv(name: string): Record<string, string | undefined>
+declare const invocation: { profile: string; patches: string[]; args: string[] }
+export {}
+
 const parentControl = process.env.DSH_PARENT_CONTROL === PARENT_CONTROL_STDIN_V1
   ? process.stdin
   : undefined
@@ -370,7 +381,7 @@ git commit -m "feat(cli): accept parent-owned graceful shutdown"
 
 The `globalImage` service is the single source of truth the three host-side checks read. Test both the schema default and the shipped patch value:
 
-```ts
+```ts ignore-check
 it('provides globalImage false by default', async () => {
   const ctx = new Context()
   apply(ctx, new Config({ printUrl: false, surfaceContext: false, trustedHosts: [] }))
@@ -399,13 +410,21 @@ Expected: FAIL because `globalImage` is not provided.
 Add to `web-app` `Config`:
 
 ```ts
-/** System-level image capability: images upload regardless of the routed model and are handled by an external vision tool. */
-globalImage: z.boolean().default(false),
+import z from '@deepseek-ai/schemastery'
+
+const Config = z.object({
+  /** System-level image capability: images upload regardless of the routed model and are handled by an external vision tool. */
+  globalImage: z.boolean().default(false),
+})
 ```
 
 In `apply`, provide the service alongside the existing runtime values:
 
 ```ts
+declare const ctx: { provide: (name: string, value: boolean) => void }
+declare const config: { globalImage: boolean }
+export {}
+
 ctx.provide('globalImage', config.globalImage)
 ```
 
@@ -445,7 +464,7 @@ git commit -m "feat(web): add web-profile global image flag"
 
 Focused handler tests through `createApiProxy` (the established apiproxy harness; `client-handler.spec.ts` is a wire-protocol suite over a scripted impl and cannot exercise admission, and the package has no Loader-booted composition precedent). The Loader/app-process REAL-composition proof for this behavior ships in Task 13's packaged smoke (POST an image-bearing prompt against the bundled runtime and assert the admission code is not `MODEL_DOES_NOT_SUPPORT_IMAGES`).
 
-```ts
+```ts ignore-check
 it('admits an image prompt when globalImage is on, without an image-capable model', async () => {
   ctx.provide('globalImage', true)
   // POST a prompt containing an image block; expect accepted, never
@@ -475,7 +494,7 @@ Expected: FAIL because the gate does not consult `globalImage`.
 
 In `prompt` admission, keep the existing model-declaration check when the flag is off, and require only the durable attachment service when it is on:
 
-```ts
+```ts ignore-check
 if (hasImage) {
   if (ctx.get('globalImage') === true) {
     if (ctx.get('attachments') === undefined) {
@@ -501,7 +520,7 @@ if (hasImage) {
 
 In `selectModel`, skip the whole pending-image restriction when the flag is on:
 
-```ts
+```ts ignore-check
 if (ctx.get('globalImage') !== true
   && (pendingImage || messagesHaveImage(found.agent.session.deriveMessages()))) {
   // existing resolveModelInfo restriction
@@ -551,12 +570,14 @@ Expected: FAIL because neither package consults the flag.
 Mirror the existing `resolveAttachments` pattern in the adapter config:
 
 ```ts
-resolveGlobalImage?: () => boolean
+type AdapterConfig = {
+  resolveGlobalImage?: () => boolean
+}
 ```
 
 In `stream`, restructure the image branch so a non-image model strips instead of throwing when the resolver returns true:
 
-```ts
+```ts ignore-check
 const globalImage = this.config.resolveGlobalImage?.() === true
 const containsImage = options.messages.some(message => contentHasImage(message.content))
 let effectiveMessages = options.messages
@@ -584,6 +605,12 @@ const context = attachments === undefined
 In `assertImageCapableRoute`, when the routed model does not declare image input, pass when the flag is on and the durable attachment service exists:
 
 ```ts
+declare const active: { inputModalities?: string[] }
+declare const ctx: { get: (name: string) => unknown }
+declare const requestedPath: string
+declare const model: string
+export {}
+
 if (active.inputModalities === undefined || !active.inputModalities.includes('image')) {
   if (ctx.get('globalImage') !== true) {
     throw new Error(`cannot read "${requestedPath}" as an image: model "${model}" does not declare image input; switch to an image-capable model to read images`)
@@ -986,7 +1013,7 @@ git commit -m "feat(desktop): add tray-owned window lifecycle"
 
 - [ ] **Step 1: Write failing deploy-plan and closure tests**
 
-```ts
+```ts ignore-check
 expect(planDesktopRuntime({ root, stage })).toEqual([
   { command: 'pnpm', args: ['run', 'build'] },
   { command: 'pnpm', args: ['run', 'verify-runtime-closure', '--manifest', 'apps/desktop/package.json'] },
@@ -1011,6 +1038,11 @@ Keep `--manifest`; derive every error prefix and missing-peer message from `runt
 - [ ] **Step 4: Implement source-plane build then artifact-plane deploy**
 
 ```ts
+declare function run(label: string, bin: string, args: string[]): Promise<void>
+declare function pnpmBin(): string
+declare const stage: string
+export {}
+
 await run('build current checkout', pnpmBin(), ['run', 'build'])
 await run('verify desktop closure', pnpmBin(), [
   'run', 'verify-runtime-closure', '--manifest', 'apps/desktop/package.json',

@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-08-14-windows-desktop-host.md
-2026-08-14-windows-desktop-host.md: 31119e12008477586f2e12c33092eaf80c7a7005
-2026-08-14-windows-desktop-host.zh.md: cbe9a9abfc9812d240a525409499c9de198bf06f

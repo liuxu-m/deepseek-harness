@@ -122,7 +122,15 @@ describe('globalImage prompt admission', () => {
     // The durable image block reached the followup message: admission does not
     // merely accept the prompt, it saves and wires the image through.
     const message = followup.mock.calls[0]![0] as { content: readonly unknown[] }
-    expect(message.content).toContainEqual(expect.objectContaining({ type: 'image', attachment: expect.objectContaining({ attachmentId: 'att-1' }) }))
+    expect(Array.isArray(message.content)).toBe(true)
+    expect(message.content.some((block) => {
+      if (typeof block !== 'object' || block === null) return false
+      const candidate = block as { type?: unknown; attachment?: unknown }
+      return candidate.type === 'image'
+        && typeof candidate.attachment === 'object'
+        && candidate.attachment !== null
+        && (candidate.attachment as { attachmentId?: unknown }).attachmentId === 'att-1'
+    })).toBe(true)
     await ctx.fiber.dispose()
   })
 

@@ -27,6 +27,19 @@ function hasRun(step: Record<string, unknown>, fragment: string): boolean {
   return typeof step.run === 'string' && step.run.includes(fragment)
 }
 
+/** The `with` block of an actions step, or an empty record when absent. */
+function stepWith(step: Record<string, unknown>): Record<string, unknown> {
+  return isRecord(step.with) ? step.with : {}
+}
+
+/** The `portable` job, asserted present and shaped. */
+function portableJob(workflow: Record<string, unknown>): Record<string, unknown> {
+  if (!isRecord(workflow.jobs) || !isRecord(workflow.jobs.portable)) {
+    throw new TypeError('workflow must define the portable job')
+  }
+  return workflow.jobs.portable
+}
+
 describe('Desktop portable workflow', () => {
   it('runs the packaged acceptance on a native Windows 2025 runner', () => {
     const workflow = loadWorkflow(WORKFLOW_PATH)
@@ -40,7 +53,7 @@ describe('Desktop portable workflow', () => {
 
   it('installs the dependency graph immutably', () => {
     const workflow = loadWorkflow(WORKFLOW_PATH)
-    const job = workflow.jobs.portable as Record<string, unknown>
+    const job = portableJob(workflow)
     const steps = stepsOf(job)
     expect(steps.some(step => hasRun(step, 'pnpm install --frozen-lockfile'))).toBe(true)
   })
@@ -58,14 +71,14 @@ describe('Desktop portable workflow', () => {
 
   it('builds the portable archive with the deterministic builder', () => {
     const workflow = loadWorkflow(WORKFLOW_PATH)
-    const job = workflow.jobs.portable as Record<string, unknown>
+    const job = portableJob(workflow)
     const steps = stepsOf(job)
     expect(steps.some(step => hasRun(step, 'pnpm run desktop:build'))).toBe(true)
   })
 
   it('runs the packaged smoke after artifact assembly', () => {
     const workflow = loadWorkflow(WORKFLOW_PATH)
-    const job = workflow.jobs.portable as Record<string, unknown>
+    const job = portableJob(workflow)
     const steps = stepsOf(job)
     const smokeIndex = steps.findIndex(step => hasRun(step, 'scripts/smoke-desktop-portable.ps1'))
     const buildIndex = steps.findIndex(step => hasRun(step, 'pnpm run desktop:build'))
@@ -76,7 +89,7 @@ describe('Desktop portable workflow', () => {
 
   it('verifies the SHA-256 checksum file before the smoke', () => {
     const workflow = loadWorkflow(WORKFLOW_PATH)
-    const job = workflow.jobs.portable as Record<string, unknown>
+    const job = portableJob(workflow)
     const steps = stepsOf(job)
     const shaIndex = steps.findIndex(step => hasRun(step, '.sha256'))
     const smokeIndex = steps.findIndex(step => hasRun(step, 'scripts/smoke-desktop-portable.ps1'))
@@ -86,12 +99,12 @@ describe('Desktop portable workflow', () => {
 
   it('uploads the ZIP, checksum, and smoke metadata', () => {
     const workflow = loadWorkflow(WORKFLOW_PATH)
-    const job = workflow.jobs.portable as Record<string, unknown>
+    const job = portableJob(workflow)
     const steps = stepsOf(job)
     const uploads = steps.filter(step => typeof step.uses === 'string' && step.uses.startsWith('actions/upload-artifact@'))
     expect(uploads.length).toBeGreaterThan(0)
     for (const upload of uploads) {
-      const path = upload.with?.path
+      const path = stepWith(upload)['path']
       expect(typeof path).toBe('string')
       expect(String(path)).toMatch(/\.zip/)
       expect(String(path)).toMatch(/\.sha256/)
@@ -100,11 +113,11 @@ describe('Desktop portable workflow', () => {
 
   it('retains PR uploads for seven days and release uploads indefinitely', () => {
     const workflow = loadWorkflow(WORKFLOW_PATH)
-    const job = workflow.jobs.portable as Record<string, unknown>
+    const job = portableJob(workflow)
     const steps = stepsOf(job)
     const upload = steps.find(step => typeof step.uses === 'string' && step.uses.startsWith('actions/upload-artifact@'))
     expect(upload).toBeDefined()
-    const retention = upload!.with?.['retention-days']
+    const retention = stepWith(upload!)['retention-days']
     expect(typeof retention).toBe('string')
     expect(String(retention)).toContain('7')
   })
