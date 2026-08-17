@@ -25,6 +25,7 @@ agent 可以读取和编辑工作区文件、运行命令、委派工作并维�
 ## 继续使用
 
 - [配置模型](./providers.md)
+- [复用已安装的 Web 插件](./plugins.md)
 - [使用 Python SDK](./python-sdk.md)
 - [使用其他 CLI 模式](../../../apps/cli/README.md)
 - [开发插件](../develop/basic/)

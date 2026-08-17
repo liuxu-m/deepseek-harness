@@ -131,6 +131,14 @@ const homeAndGuide = pairedPages([
     order: 2,
   },
   {
+    source: 'docs/user/guide/plugins.md',
+    route: 'guide/plugins.md',
+    label: { root: '复用已安装插件', en: 'Reuse installed plugins' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '入门', en: 'Guide' },
+    order: 3,
+  },
+  {
     source: 'docs/user/guide/python-sdk.md',
     route: 'guide/python-sdk.md',
     label: { root: 'Python', en: 'Python' },
