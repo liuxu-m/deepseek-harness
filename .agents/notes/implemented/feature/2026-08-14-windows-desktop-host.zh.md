@@ -35,7 +35,7 @@ DeepSeek Harness Desktop.exe
 
 桌面应用持有一个单实例 OS 锁；第二次启动只唤起既有窗口，不派生第二个 Host。在启动自己的 Host 之前，host 主管探测 `http://127.0.0.1:3080/api/runtime.identity`——一个由 `@deepseek-ai/dsh-web-app` 提供的只读身份路由。响应只携带非敏感事实——`{product: "deepseek-harness", desktopProtocol: 1, version, instanceId, homeKind}`——绝不返回 `$DSH_HOME` 的绝对路径。被探测确认为兼容的监听者（product 匹配、协议 `1`、`homeKind: "default"`、version/instanceId 非空）会被**附着**：桌面绝不触碰该进程，Exit 也只对其解除附着。端口上什么都没有或只有非 DSH 监听者时触发 **StartDefault**（在 3080 启动自有 Host）；3080 被不兼容监听者占用时触发 **StartDynamic**（在动态分配的回环端口启动自有 Host），而不是杀死占用者。探测会解码 chunked-transfer 响应体（Node host 的默认行为），并把响应限制在 4 KiB 以内。
 
-自有 Host 运行捆绑的 `node/node.exe`，执行 `runtime/node_modules/@deepseek-ai/dsh/lib/bin.js --profile web --port <port>`，并被包裹在一个关闭即杀（kill-on-close）的 Windows Job Object 中。就绪判据是 `dsh web: http://127.0.0.1:<port>` 这一 stdout 行加上身份再校验。关停通过 stdin 上的父进程控制帧（`{"type":"shutdown","protocol":1}`）进行，带一个有界宽限期，随后关闭 Job（整树 kill）。桌面崩溃会回收整棵自有进程树。
+自有 Host 运行捆绑的 `node/node.exe`，执行 `runtime/node_modules/@deepseek-ai/dsh/lib/bin.js --profile web --port <port>`，并被包裹在一个关闭即杀（kill-on-close）的 Windows Job Object 中。原生 `CreateProcessW` 桥接在派生之前会为所有 UTF-16 路径缓冲区（包括显式工作目录）追加 NUL 终止符。就绪判据是 `dsh web: http://127.0.0.1:<port>` 这一 stdout 行加上身份再校验。关停通过 stdin 上的父进程控制帧（`{"type":"shutdown","protocol":1}`）进行，带一个有界宽限期，随后关闭 Job（整树 kill）。桌面崩溃会回收整棵自有进程树。
 
 ### 窗口与托盘生命周期
 
@@ -57,7 +57,7 @@ Windows x64 便携 ZIP；机器需要 WebView2 Runtime（Windows 10/11）；无�
 
 ## Verification
 
-`desktop-portable` GitHub Actions 工作流（windows-2025）构建便携 ZIP、校验其 SHA-256，并运行 `scripts/smoke-desktop-portable.ps1`。该冒烟脚本把新构建解压到含空格与 CJK 的路径，隔离 profile 并用干净的子进程 PATH 运行，检查自有/附着模式、关闭到托盘、Job Object 对崩溃进程的回收、端口被占时的回退、`globalImage` 图片提示，以及泄漏扫描。
+`desktop-portable` GitHub Actions 工作流（windows-2025）构建便携 ZIP、校验其 SHA-256，并运行 `scripts/smoke-desktop-portable.ps1`。该冒烟脚本把新构建解压到含空格与 CJK 的路径，隔离 profile 并用干净的子进程 PATH 运行，检查自有/附着模式、关闭到托盘、Job Object 对崩溃进程的回收、端口被占时的回退、`globalImage` 图片提示，以及泄漏扫描。Windows supervisor 测试还会在真实进程上使用已存在的工作目录，覆盖 `CreateProcessW` 路径缓冲区终止规则。
 
 ## Alternatives considered
 

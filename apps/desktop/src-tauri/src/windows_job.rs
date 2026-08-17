@@ -372,7 +372,11 @@ pub fn create_process_suspended(
     };
     let mut process_info = PROCESS_INFORMATION::default();
 
-    let current_dir = cwd.map(|p| p.as_os_str().encode_wide().collect::<Vec<u16>>());
+    let current_dir = cwd.map(|p| {
+        let mut wide = p.as_os_str().encode_wide().collect::<Vec<u16>>();
+        wide.push(0);
+        wide
+    });
     let current_dir_ptr = current_dir
         .as_ref()
         .map(|w| windows::core::PCWSTR(w.as_ptr()))

@@ -13,7 +13,7 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 use std::thread;
@@ -409,6 +409,25 @@ fn closing_the_job_reclaims_child_and_grandchild() {
     drop(owned);
     assert!(wait_until_dead(child, TIMEOUT), "child survived its job close");
     assert!(wait_until_dead(grandchild, TIMEOUT), "grandchild survived its job close");
+}
+
+#[test]
+fn spawning_with_an_existing_working_directory_succeeds() {
+    let (exe, args) = fixture_command("normal-exit");
+    let cwd = std::env::current_dir().expect("test working directory is readable");
+    assert!(cwd.is_dir(), "test working directory must exist: {cwd:?}");
+
+    let process = OwnedProcess::spawn(
+        exe.to_string_lossy().as_ref(),
+        &args,
+        Some(Path::new(&cwd)),
+        None,
+    );
+
+    assert!(
+        process.is_ok(),
+        "CreateProcessW rejected an existing working directory: {process:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------

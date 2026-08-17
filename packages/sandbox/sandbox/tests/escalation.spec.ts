@@ -81,6 +81,16 @@ describe('approveEscalation', () => {
     expect(seen[0]?.reason).toBe('escalate sandbox to workspace-write: the user asked to write in the workspace')
   })
 
+  it('accepts a redundant highest-permission request without asking again', async () => {
+    const seen: unknown[] = []
+    const granted = await approveEscalation(
+      req({ requestedMode: 'danger-full-access', effectiveMode: 'danger-full-access' as never }),
+      ingredients({ approver: approver('allowed-once', request => seen.push(request)) }),
+    )
+    expect(granted).toBe('danger-full-access')
+    expect(seen).toEqual([])
+  })
+
   it('a non-widening request fails closed with its own text and never asks', async () => {
     const seen: unknown[] = []
     const spy = ingredients({ approver: approver('allowed-once', r => seen.push(r)) })

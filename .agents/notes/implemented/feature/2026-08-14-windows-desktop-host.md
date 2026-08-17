@@ -35,7 +35,7 @@ DeepSeek Harness Desktop.exe
 
 The desktop app holds a single-instance OS lock; a second launch surfaces the existing window instead of spawning another Host. Before starting its own Host, the supervisor probes `http://127.0.0.1:3080/api/runtime.identity`, a GET-only identity route served by `@deepseek-ai/dsh-web-app`. The response carries only non-sensitive facts — `{product: "deepseek-harness", desktopProtocol: 1, version, instanceId, homeKind}` — and never the absolute `$DSH_HOME` path. A listener the probe confirms as compatible (product match, protocol `1`, `homeKind: "default"`, non-empty version/instanceId) is **attached**: the desktop never touches that process, and Exit detaches it only. Nothing or a non-DSH listener on the port triggers **StartDefault** (an own Host at 3080) or, when 3080 is occupied by a non-compatible listener, **StartDynamic** (an own Host on a dynamically assigned loopback port) rather than killing the occupant. The probe decodes chunked-transfer bodies (the Node host's default) and caps responses at 4 KiB.
 
-An owned Host runs the bundled `node/node.exe` executing `runtime/node_modules/@deepseek-ai/dsh/lib/bin.js --profile web --port <port>`, contained in a kill-on-close Windows Job Object. Readiness is the `dsh web: http://127.0.0.1:<port>` stdout line plus identity revalidation. Shutdown is a parent-control frame on stdin (`{"type":"shutdown","protocol":1}`) with a bounded grace, then Job close (tree kill). A desktop crash reclaims the whole owned tree.
+An owned Host runs the bundled `node/node.exe` executing `runtime/node_modules/@deepseek-ai/dsh/lib/bin.js --profile web --port <port>`, contained in a kill-on-close Windows Job Object. The native `CreateProcessW` bridge NUL-terminates every UTF-16 path buffer, including the explicit working directory, before spawning. Readiness is the `dsh web: http://127.0.0.1:<port>` stdout line plus identity revalidation. Shutdown is a parent-control frame on stdin (`{"type":"shutdown","protocol":1}`) with a bounded grace, then Job close (tree kill). A desktop crash reclaims the whole owned tree.
 
 ### Window and tray lifecycle
 
@@ -57,7 +57,7 @@ Windows x64 portable ZIP; WebView2 Runtime required on the machine (Windows 10/1
 
 ## Verification
 
-The `desktop-portable` GitHub Actions workflow (windows-2025) builds the portable ZIP, verifies its SHA-256, and runs `scripts/smoke-desktop-portable.ps1`. The smoke extracts a fresh build into a path with spaces and CJK, runs with an isolated profile and a clean child PATH, and checks owned and attached modes, close-to-tray, crash reclaim by the Job Object, occupied-port fallback, the `globalImage` image prompt, and a leak scan.
+The `desktop-portable` GitHub Actions workflow (windows-2025) builds the portable ZIP, verifies its SHA-256, and runs `scripts/smoke-desktop-portable.ps1`. The smoke extracts a fresh build into a path with spaces and CJK, runs with an isolated profile and a clean child PATH, and checks owned and attached modes, close-to-tray, crash reclaim by the Job Object, occupied-port fallback, the `globalImage` image prompt, and a leak scan. The Windows supervisor tests also spawn a real fixture with an existing working directory, covering the `CreateProcessW` path-buffer termination requirement.
 
 ## Alternatives considered
 
