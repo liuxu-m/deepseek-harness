@@ -6,21 +6,19 @@
 
 ## 安装同样的插件
 
-安装历史 Token 用量页面、工作区 Explorer 与 Preview 面板，以及皮肤中心：
+安装历史 Token 用量页面，以及工作区 Explorer 与 Preview 面板：
 
 ```sh
 dsh plugin --profile web add github:LaoYueHanNi/dsh-token-usage
 dsh plugin --profile web add @linxin666/dsh-client-ui-aionui-panel
-dsh plugin --profile web add @linxin666/dsh-skins
 ```
 
-当前 profile 中已验证的版本为 `dsh-token-usage` `0.2.2`、`@linxin666/dsh-client-ui-aionui-panel` `0.1.20` 和 `@linxin666/dsh-skins` `0.1.20`。不复制 profile lockfile 时，包管理器可能解析到更新版本。
+当前 profile 中已验证的版本为 `dsh-token-usage` `0.2.2` 和 `@linxin666/dsh-client-ui-aionui-panel` `0.1.20`。不复制 profile lockfile 时，包管理器可能解析到更新版本。
 
 ## 提供的功能
 
 - `dsh-token-usage` 记录模型请求、回填已有会话日志，并在**设置 → Token Usage**中提供按日期筛选的每日总量、按模型用量和费用估算。
 - `@linxin666/dsh-client-ui-aionui-panel` 添加右侧 Explorer 与 Preview 面板。Explorer 显示当前工作区目录树和 Git 变更；Preview 支持查看源码、分屏编辑和保存文件。
-- `@linxin666/dsh-skins` 添加皮肤中心和社区主题。
 
 ## 生效与验证
 
@@ -31,7 +29,6 @@ dsh plugin --profile web add @linxin666/dsh-skins
 ```sh
 dsh plugin --profile web why dsh-token-usage
 dsh plugin --profile web why @linxin666/dsh-client-ui-aionui-panel
-dsh plugin --profile web why @linxin666/dsh-skins
 dsh --profile web --dump-config
 ```
 
