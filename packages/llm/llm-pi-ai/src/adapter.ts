@@ -177,12 +177,18 @@ function reasoningInfo(
   }
 }
 
-/** Merge deployment headers while removing case-insensitive attribution collisions. */
-function requestHeaders(headers: Readonly<Record<string, string>> | undefined): Record<string, string> {
-  const attribution = attributionHeaders()
+/**
+ * Merge deployment headers while removing case-insensitive attribution
+ * collisions. `userAgentOverride` swaps the mandated `user-agent` value for
+ * this route; everything else it sets keeps travelling through `headers`.
+ */
+function requestHeaders(profile: ResolvedPiAiProviderProfile): Record<string, string> {
+  const attribution = profile.userAgentOverride === undefined
+    ? attributionHeaders()
+    : { 'user-agent': profile.userAgentOverride }
   const reserved = new Set(Object.keys(attribution).map(name => name.toLowerCase()))
   return {
-    ...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
+    ...Object.fromEntries(Object.entries(profile.headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
     ...attribution,
   }
 }
@@ -379,8 +385,9 @@ export class PiAiAdapter extends LlmAdapter {
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
         signal: watchdog.signal,
         // Profile headers are deployment-owned; attribution names are
-        // Harness-owned and therefore win collisions.
-        headers: requestHeaders(profile.headers),
+        // Harness-owned and therefore win collisions, unless the profile
+        // overrides the user-agent itself.
+        headers: requestHeaders(profile),
       })
       const iterator = toStreamChunks(events, model.contextWindow)[Symbol.asyncIterator]()
       let exhausted = false

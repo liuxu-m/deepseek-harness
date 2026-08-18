@@ -37,6 +37,17 @@ describe('reasoning schema boundary', () => {
   })
 })
 
+describe('userAgentOverride boundary', () => {
+  it('accepts a single-line override and refuses empty or newline values', () => {
+    expect(() => assertServiceable(routeWith({ userAgentOverride: 'codex_cli_rs/0.147.0' })() as Config))
+      .not.toThrow()
+    expect(() => assertServiceable(routeWith({ userAgentOverride: '' })() as Config))
+      .toThrow(/single-line non-empty/)
+    expect(() => assertServiceable(routeWith({ userAgentOverride: 'x\r\nInjected: yes' })() as Config))
+      .toThrow(/single-line non-empty/)
+  })
+})
+
 describe('modality schema boundary', () => {
   it('rejects a modality pi-ai does not know, at either level', () => {
     expect(configWith({ input: ['audio'] })).toThrow(/expected/)

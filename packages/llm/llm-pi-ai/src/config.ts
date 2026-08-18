@@ -122,6 +122,14 @@ export interface PiAiProviderProfile {
   defaultInput?: PiAiModality[]
   /** Provider request headers; Harness attribution wins reserved names. */
   headers?: Record<string, string>
+  /**
+   * Replace this route's `user-agent` attribution header value. Omission keeps
+   * the mandatory default `deepseek-harness/<version> (+url)`; a deployment
+   * that must present a different client identity to a gateway sets the exact
+   * `User-Agent` value here. Other headers still travel through `headers`.
+   * Empty or newline-containing values are refused at resolution.
+   */
+  userAgentOverride?: string
   /** Provider-neutral pi-ai reasoning level. */
   reasoning?: ModelThinkingLevel
   /** Token budgets used by reasoning providers that support them. */
@@ -241,6 +249,7 @@ const profile = z.object({
   defaultMaxTokens: z.number().step(1).min(1).default(DEFAULT_MAX_TOKENS),
   defaultInput: z.array(z.union(MODALITIES)).default([...DEFAULT_INPUT]),
   headers: z.dict(z.string()),
+  userAgentOverride: z.string(),
   reasoning: z.union(THINKING_LEVELS),
   thinkingBudgets,
   cacheRetention: z.union(['none', 'short', 'long']),
@@ -309,6 +318,10 @@ export function resolveProfiles(
   for (const [provider, source] of entries) {
     rejectRemovedFields(provider, source)
     if (provider.length === 0) throw new Error('llm-pi-ai: provider names must be non-empty')
+    if (source.userAgentOverride !== undefined
+      && (source.userAgentOverride.length === 0 || /[\r\n]/.test(source.userAgentOverride))) {
+      throw new Error(`llm-pi-ai: provider "${provider}" userAgentOverride must be a single-line non-empty header value`)
+    }
     if (source.baseURL !== undefined && source.baseURL.length === 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" has an empty baseURL`)
     }

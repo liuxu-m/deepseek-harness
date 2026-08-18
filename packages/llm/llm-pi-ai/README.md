@@ -153,6 +153,8 @@ If a listener rewrites assembled assistant content, the loop drops replay state 
 
 Every request carries the shared attribution header from dsh-llm's `attributionHeaders()`, merged through pi-ai's `headers` stream option. Provider-specific app-attribution headers are not synthesized. See [dsh-llm § App attribution](../llm/README.md#app-attribution-attributionts).
 
+A provider route may set `userAgentOverride` to replace this route's `user-agent` value with an exact `User-Agent` the deployment must present to a gateway (for example a Codex-compatible gateway fingerprint). The default stays the mandatory `deepseek-harness/<version> (+url)` for every route that does not opt in. Other client-identity headers such as `originator` or `openai-beta` travel through the route's `headers` as usual; empty or newline-containing `userAgentOverride` values are refused at resolution. Discovery (`GET /models`) keeps the default attribution — it is not a model request and needs no client fingerprint.
+
 ## Dependency weight
 
 pi-ai installs several provider SDKs and lazy-loads the one selected by the catalog model. The dependency weight is isolated to this opt-in adapter package.

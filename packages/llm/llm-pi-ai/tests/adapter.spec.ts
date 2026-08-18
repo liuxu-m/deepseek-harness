@@ -83,6 +83,18 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.headers[0]?.['user-agent']).toBe(userAgent())
   })
 
+  it('honors a profile userAgentOverride for the route', async () => {
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = await harness(server.url, {
+      userAgentOverride: 'codex_cli_rs/0.147.0 (Windows 10.0.26200; x86_64)',
+      headers: { originator: 'codex_cli_rs', 'openai-beta': 'responses=experimental' },
+    })
+    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
+    expect(server.headers[0]?.['user-agent']).toBe('codex_cli_rs/0.147.0 (Windows 10.0.26200; x86_64)')
+    expect(server.headers[0]?.['originator']).toBe('codex_cli_rs')
+    expect(server.headers[0]?.['openai-beta']).toBe('responses=experimental')
+  })
+
   it('forwards common stream options and profile reasoning', async () => {
     const server = await mockServer([{ events: textEvents }])
     const ctx = await harness(server.url, {

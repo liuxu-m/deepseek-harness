@@ -154,6 +154,8 @@ profile 的 `models` 列表是*替换*该路由已安装 catalog，而不是扩�
 
 每个请求都携带 dsh-llm `attributionHeaders()` 的共享归因标头，并通过 pi-ai `headers` 流选项合并。不会合成提供方特定应用归因标头。详见 [dsh-llm § 应用归因](../llm/README.md#app-attribution-attributionts)。
 
+Provider 路由可设置 `userAgentOverride` 以将该路由的 `user-agent` 替换为部署必须向网关出示的确切值（例如面向 Codex 兼容网关的客户端指纹）。未设置的每个路由默认仍保持强制的 `deepseek-harness/<版本> (+url)`。`originator`、`openai-beta` 等其他客户端身份头照常经该路由的 `headers` 配置；`userAgentOverride` 为空或含换行会在解析时被拒绝。模型发现（`GET /models`）保持默认归因——它不是模型请求，无需客户端指纹。
+
 ## 依赖体量
 
 pi-ai 会安装多个提供方 SDK，并延迟加载 catalog 模型所选的 SDK。该可选适配器包将依赖体量隔离在自身范围内。
