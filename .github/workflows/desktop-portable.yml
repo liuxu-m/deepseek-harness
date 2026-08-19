@@ -192,10 +192,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Android Gradle project
-        run: pnpm run desktop:android:init -- --ci --skip-targets-install
+        run: pnpm --filter @deepseek-ai/dsh-desktop exec tauri android init --ci --skip-targets-install
 
       - name: Build ARM64 APK and AAB
-        run: pnpm run desktop:android:build -- --apk --aab --target aarch64
+        run: pnpm --filter @deepseek-ai/dsh-desktop exec tauri android build --apk --aab --target aarch64
 
       - name: Upload Android APK and AAB
         uses: actions/upload-artifact@v7

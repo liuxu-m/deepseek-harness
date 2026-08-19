@@ -137,8 +137,8 @@ describe('Desktop portable workflow', () => {
     expect(job['runs-on']).toBe('ubuntu-24.04')
     expect(steps.some(step => hasRun(step, "'ndk;27.0.12077973'"))).toBe(true)
     expect(steps.some(step => hasRun(step, 'sdkmanager_status=${PIPESTATUS[1]}'))).toBe(true)
-    expect(steps.some(step => hasRun(step, 'pnpm run desktop:android:init -- --ci --skip-targets-install'))).toBe(true)
-    expect(steps.some(step => hasRun(step, 'pnpm run desktop:android:build -- --apk --aab --target aarch64'))).toBe(true)
+    expect(steps.some(step => hasRun(step, 'pnpm --filter @deepseek-ai/dsh-desktop exec tauri android init --ci --skip-targets-install'))).toBe(true)
+    expect(steps.some(step => hasRun(step, 'pnpm --filter @deepseek-ai/dsh-desktop exec tauri android build --apk --aab --target aarch64'))).toBe(true)
   })
 
   it('uploads only Android install artifacts from the manual package job', () => {
