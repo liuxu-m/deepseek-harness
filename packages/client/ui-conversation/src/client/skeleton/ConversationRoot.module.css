@@ -32,6 +32,12 @@
   border-bottom: 1px solid transparent;
 }
 
+@media (max-width: 767px) {
+  .header {
+    padding-left: 64px;
+  }
+}
+
 .header::after {
   content: '';
   position: absolute;

@@ -29,4 +29,4 @@ Rejected as the product package: it avoids native packaging but does not provide
 - Android packaging is independent of the Windows portable archive and does not include Node or DSH runtime files.
 - The first client screen requires a reachable remote URL; changing the saved address is done by returning to the setup page or clearing the app's WebView data.
 - Android builds require the Tauri Android project plus the Android SDK, NDK, Java, and Gradle environment on the build machine; the repository workflow supplies these on Ubuntu, restores its release keystore from Actions secrets, verifies the ARM64 APK signature, and uploads signed APK/AAB artifacts for pull requests and manual runs.
-- The remote Web Host remains the single owner of sessions, settings, credentials, workspaces, and tool execution.
+- The remote Web Host remains the single owner of sessions, settings, credentials, workspaces, tool execution, and the responsive phone layout; at phone widths the shared Web UI keeps the conversation full-width and exposes navigation as a temporary drawer within the safe display area.

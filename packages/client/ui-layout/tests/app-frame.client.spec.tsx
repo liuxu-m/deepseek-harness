@@ -11,7 +11,7 @@
  * resizes are driven through the ResizeObserver stub.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
 import type { AppFrameProps } from '@deepseek-ai/dsh-client-ui-layout/src/client/AppFrame.tsx'
@@ -212,6 +212,28 @@ describe('AppFrame', () => {
     selectedSession.current = 's-first' as SessionId
     act(() => { rerenderFrame() })
     expect(tracks(frame)).toEqual([280, 0])
+  })
+
+  it('renders phones as a full-width conversation with a temporary sidebar drawer', () => {
+    frameWidth = 393
+    const { frame, instance, getByRole } = mountFrame()
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(frame.dataset.phone).toBe('true')
+    expect(frame.dataset.sidebarCollapsed).toBe('true')
+
+    act(() => { fireEvent.click(getByRole('button', { name: '打开侧边栏' })) })
+    expect(instance.getSnapshot().narrowExpanded).toBe(true)
+    expect(frame.dataset.sidebarCollapsed).toBeUndefined()
+    const backdrop = frame.querySelector('[class*=mobileBackdrop]')
+    expect(backdrop).toBeTruthy()
+
+    act(() => { fireEvent.click(backdrop!) })
+    expect(instance.getSnapshot().narrowExpanded).toBe(false)
+    expect(frame.dataset.sidebarCollapsed).toBe('true')
+
+    act(() => { fireEvent.click(getByRole('button', { name: '打开侧边栏' })) })
+    act(() => { fireEvent.keyDown(window, { key: 'Escape' }) })
+    expect(instance.getSnapshot().narrowExpanded).toBe(false)
   })
 
   it('sidebar slot receives live concession output as owner props', () => {

@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconPanelLeftOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
@@ -127,19 +128,25 @@ export function AppFrame({
     }
   }, [])
 
-  // Narrow viewports auto-collapse the sidebar; the store mirror keeps
-  // toggleSidebar's semantics right (narrow toggles flip the manual
-  // re-expand override, stores.ts). Collapsed is decided here, so the
-  // solver stays breakpoint-free: a narrow re-expand passes the preference
-  // (or the default when the wide preference is closed) and the center
-  // absorbs the squeeze.
+  // Narrow viewports auto-collapse the sidebar; on phones the same stored
+  // override opens a drawer while the conversation remains full-width.
   const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
+  const phone = viewport <= 767
   useEffect(() => { actions.setNarrow(narrow) }, [actions, narrow])
-  const sidebarCollapsed = narrow ? !panels.narrowExpanded : panels.sidebar === 0
+  const mobileSidebarOpen = phone && panels.narrowExpanded
+  const sidebarCollapsed = phone
+    ? !mobileSidebarOpen
+    : narrow ? !panels.narrowExpanded : panels.sidebar === 0
   const sidebarPreference = sidebarCollapsed
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
-  const cols = computeColumns(viewport, sidebarPreference, detailsSession === undefined ? 0 : panels.details)
+  const desktopCols = computeColumns(viewport, sidebarPreference, detailsSession === undefined ? 0 : panels.details)
+  const cols = phone
+    ? { sidebar: 0, center: viewport, details: 0 }
+    : desktopCols
+  const sidebarWidth = phone
+    ? Math.min(Math.round(viewport * 0.86), 336)
+    : cols.sidebar
   const colsRef = useRef(cols)
   colsRef.current = cols
 
@@ -160,6 +167,14 @@ export function AppFrame({
   const onDetailsDrag = useCallback((dx: number) => {
     actions.setDetails(detailsBase.current - dx)
   }, [actions])
+  useEffect(() => {
+    if (!mobileSidebarOpen) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') actions.toggleSidebar()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => { window.removeEventListener('keydown', onKeyDown) }
+  }, [actions, mobileSidebarOpen])
 
   return (
     <div
@@ -169,16 +184,12 @@ export function AppFrame({
       data-sidebar-collapsed={sidebarCollapsed || undefined}
       data-details-collapsed={cols.details === 0 || undefined}
       data-dragging={dragging || undefined}
+      data-phone={phone || undefined}
     >
       <div className={css.sidebarCol}>
-        {/* Render-site slot call with live concession output: a closed
-            sidebar keeps the mounted slot at the compact-rail width, and the
-            component sees its rendered state as owner params decided here
-            (collapsed follows the resolved rail, so a derived auto-collapse
-            renders the rail UI too). */}
         {renderSlot('sidebar', {
-          collapsed: sidebarCollapsed,
-          width: cols.sidebar,
+          collapsed: phone ? false : sidebarCollapsed,
+          width: sidebarWidth,
         })}
       </div>
       <>
@@ -193,9 +204,29 @@ export function AppFrame({
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}
       </div>
-      {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-      {cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
+      {phone && (
+        <>
+          <button
+            type="button"
+            className={css.mobileMenu}
+            aria-label={mobileSidebarOpen ? '关闭侧边栏' : '打开侧边栏'}
+            aria-expanded={mobileSidebarOpen}
+            onClick={() => { actions.toggleSidebar() }}
+          >
+            <IconPanelLeftOutline16 size={20} />
+          </button>
+          {mobileSidebarOpen && (
+            <button
+              type="button"
+              className={css.mobileBackdrop}
+              aria-label="关闭侧边栏"
+              onClick={() => { actions.toggleSidebar() }}
+            />
+          )}
+        </>
+      )}
+      {!phone && !sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {!phone && cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
     </div>
   )
 }
