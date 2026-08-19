@@ -126,6 +126,7 @@
   }
 
   .frame[data-phone]:not([data-sidebar-collapsed]) .mobileMenu {
+    left: calc(min(86vw, 336px) + 1px);
     color: var(--dsw-alias-label-secondary);
   }
 }
