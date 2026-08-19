@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Packaged-acceptance smoke for the portable DeepSeek Harness Windows archive.
 
@@ -504,7 +504,7 @@ function Invoke-Check10 {
     $listener.Prefixes.Add('http://127.0.0.1:3080/')
     $listener.Start()
     $ownFixture = $true
-    $null = $listener.GetContextAsync().ContinueWith({
+    $respond = [System.Action[System.Threading.Tasks.Task[System.Net.HttpListenerContext]]]{
       param($task)
       $context = $task.Result
       $bytes = [System.Text.Encoding]::UTF8.GetBytes('{"not":"a-dsh-host"}')
@@ -512,7 +512,8 @@ function Invoke-Check10 {
       $context.Response.ContentLength64 = $bytes.Length
       $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
       $context.Response.Close()
-    }, [System.Threading.Tasks.TaskScheduler]::Default)
+    }
+    $null = $listener.GetContextAsync().ContinueWith($respond, [System.Threading.Tasks.TaskScheduler]::Default)
   }
 
   # Clear the logs so Wait-DesktopStart matches only this run's start line.

@@ -138,6 +138,7 @@ describe('Desktop portable workflow', () => {
     expect(steps.some(step => hasRun(step, "'ndk;27.0.12077973'"))).toBe(true)
     expect(steps.some(step => hasRun(step, 'sdkmanager_status=${PIPESTATUS[1]}'))).toBe(true)
     expect(steps.some(step => hasRun(step, 'pnpm --filter @deepseek-ai/dsh-desktop exec tauri android init --ci --skip-targets-install'))).toBe(true)
+    expect(steps.some(step => hasRun(step, 'for attempt in 1 2 3'))).toBe(true)
     expect(steps.some(step => hasRun(step, 'pnpm --filter @deepseek-ai/dsh-desktop exec tauri android build --apk --aab --target aarch64'))).toBe(true)
   })
 

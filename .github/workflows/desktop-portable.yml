@@ -195,7 +195,17 @@ jobs:
         run: pnpm --filter @deepseek-ai/dsh-desktop exec tauri android init --ci --skip-targets-install
 
       - name: Build ARM64 APK and AAB
-        run: pnpm --filter @deepseek-ai/dsh-desktop exec tauri android build --apk --aab --target aarch64
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm --filter @deepseek-ai/dsh-desktop exec tauri android build --apk --aab --target aarch64; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep "$((attempt * 30))"
+            fi
+          done
+          exit 1
 
       - name: Upload Android APK and AAB
         uses: actions/upload-artifact@v7
