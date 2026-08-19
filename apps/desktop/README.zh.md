@@ -51,4 +51,4 @@ DeepSeek Harness/
 
 ## GitHub Actions 打包
 
-工作流 `.github/workflows/desktop-portable.yml` 继续在 `windows-2025` 上构建 Windows 便携版。手动运行工作流时，还会在 Ubuntu 上并行启动独立的 Android ARM64 job，并将可安装 APK 和适用于应用商店的 AAB 上传为 Actions artifact。可以用 `gh workflow run desktop-portable.yml --ref <branch>` 或 GitHub Actions 页面同时触发两种打包。未配置 Android 签名密钥和 release 签名步骤时，这些产物不会签名。
+工作流 `.github/workflows/desktop-portable.yml` 继续在 `windows-2025` 上构建 Windows 便携版。PR 和手动运行工作流时，还会在 Ubuntu 上并行启动独立的 Android ARM64 job，并将可安装 APK 和适用于应用商店的 AAB 上传为 Actions artifact。工作流进入默认分支后，可以用 `gh workflow run desktop-portable.yml --ref <branch>` 或 GitHub Actions 页面同时触发两种打包。未配置 Android 签名密钥和 release 签名步骤时，这些产物不会签名。

@@ -51,4 +51,4 @@ The shell is unsigned in development; Windows SmartScreen or antivirus may warn 
 
 ## GitHub Actions packaging
 
-The workflow `.github/workflows/desktop-portable.yml` keeps the Windows portable build on `windows-2025`. A manual workflow run also starts an independent Android ARM64 job on Ubuntu, which uploads an installable APK and a Play-compatible AAB as Actions artifacts. Trigger both packages with `gh workflow run desktop-portable.yml --ref <branch>` or the GitHub Actions UI. These artifacts are unsigned unless Android signing secrets and a release signing step are configured.
+The workflow `.github/workflows/desktop-portable.yml` keeps the Windows portable build on `windows-2025`. Pull requests and manual workflow runs also start an independent Android ARM64 job on Ubuntu, which uploads an installable APK and a Play-compatible AAB as Actions artifacts. Trigger both packages with `gh workflow run desktop-portable.yml --ref <branch>` or the GitHub Actions UI once the workflow reaches the default branch. These artifacts are unsigned unless Android signing secrets and a release signing step are configured.

@@ -1,4 +1,4 @@
-/** Desktop package workflow policy for Windows and manual Android artifacts. */
+/** Desktop package workflow policy for Windows and Android artifacts. */
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -129,11 +129,11 @@ describe('Desktop portable workflow', () => {
     expect(String(retention)).toContain('7')
   })
 
-  it('builds ARM64 Android APK and AAB only for manual package runs', () => {
+  it('builds ARM64 Android APK and AAB for pull requests and manual package runs', () => {
     const workflow = loadWorkflow(WORKFLOW_PATH)
     const job = androidJob(workflow)
     const steps = stepsOf(job)
-    expect(job.if).toBe("github.event_name == 'workflow_dispatch'")
+    expect(job.if).toBe("github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'")
     expect(job['runs-on']).toBe('ubuntu-24.04')
     expect(steps.some(step => hasRun(step, "'ndk;27.0.12077973'"))).toBe(true)
     expect(steps.some(step => hasRun(step, 'pnpm run desktop:android:init -- --ci --skip-targets-install'))).toBe(true)
