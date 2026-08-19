@@ -191,6 +191,10 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      - name: Expose Tauri CLI to Gradle
+        shell: bash
+        run: echo "${{ github.workspace }}/apps/desktop/node_modules/.bin" >> "$GITHUB_PATH"
+
       - name: Generate Android Gradle project
         run: pnpm --filter @deepseek-ai/dsh-desktop exec tauri android init --ci --skip-targets-install
 
