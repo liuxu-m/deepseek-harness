@@ -8,6 +8,7 @@ import {
   retainIssueReferences,
   resolvingIssueStatusCommand,
   requiresPullRequestPolicy,
+  repositoryCoordinates,
   validateBody,
   validateIssue,
   validatePullRequest,
@@ -61,6 +62,15 @@ const reviewedPull = (labels) => ({
   labels,
   references: { all: [2], resolving: [], related: [2] },
   issues: new Map([[2, { priority: null }]]),
+})
+
+test('resolves GitHub repository coordinates from owner/name', () => {
+  assert.deepEqual(repositoryCoordinates('liuxu-m/deepseek-harness'), {
+    organization: 'liuxu-m',
+    repository: 'deepseek-harness',
+  })
+  assert.throws(() => repositoryCoordinates('deepseek-harness'), /owner\/name/)
+  assert.throws(() => repositoryCoordinates('owner/name/extra'), /owner\/name/)
 })
 
 test('counts only text outside details', () => {
