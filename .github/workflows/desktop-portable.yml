@@ -198,8 +198,64 @@ jobs:
       - name: Generate Android Gradle project
         run: pnpm --filter @deepseek-ai/dsh-desktop exec tauri android init --ci --skip-targets-install
 
+      - name: Configure Android release signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/deepseek-harness-release.jks
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs'
+
+          const path = 'apps/desktop/src-tauri/gen/android/app/build.gradle.kts'
+          const source = readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
+          const signingProperties = [
+            'val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")',
+            '  ?: throw GradleException("ANDROID_KEYSTORE_PATH is required for release signing")',
+            'val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")',
+            '  ?: throw GradleException("ANDROID_KEYSTORE_PASSWORD is required for release signing")',
+            'val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")',
+            '  ?: throw GradleException("ANDROID_KEY_ALIAS is required for release signing")',
+            'val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")',
+            '  ?: throw GradleException("ANDROID_KEY_PASSWORD is required for release signing")',
+          ].join('\n')
+          const signingConfig = [
+            '    signingConfigs {',
+            '        create("release") {',
+            '            storeFile = file(releaseKeystorePath)',
+            '            storePassword = releaseKeystorePassword',
+            '            keyAlias = releaseKeyAlias',
+            '            keyPassword = releaseKeyPassword',
+            '        }',
+            '    }',
+          ].join('\n')
+          const configured = source
+            .replace('\nandroid {\n', `\n${signingProperties}\n\nandroid {\n`)
+            .replace('    buildTypes {\n', `${signingConfig}\n\n    buildTypes {\n`)
+            .replace(
+              '        getByName("release") {\n',
+              '        getByName("release") {\n            signingConfig = signingConfigs.getByName("release")\n',
+            )
+          if (configured === source) throw new Error('Tauri Android Gradle signing markers were not found')
+          writeFileSync(path, configured)
+          NODE
+
       - name: Build ARM64 APK and AAB
         shell: bash
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/deepseek-harness-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           for attempt in 1 2 3; do
             if pnpm --filter @deepseek-ai/dsh-desktop exec tauri android build --apk --aab --target aarch64; then
@@ -211,12 +267,22 @@ jobs:
           done
           exit 1
 
-      - name: Upload Android APK and AAB
+      - name: Verify signed Android APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='apps/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk'
+          test -f "$apk"
+          ! find apps/desktop/src-tauri/gen/android/app/build/outputs -name '*-unsigned.apk' -print -quit | grep -q .
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk"
+          rm -f "$RUNNER_TEMP/deepseek-harness-release.jks"
+
+      - name: Upload signed Android APK and AAB
         uses: actions/upload-artifact@v7
         with:
           name: desktop-android-arm64-${{ github.sha }}
           path: |
-            apps/desktop/src-tauri/gen/android/app/build/outputs/**/*.apk
-            apps/desktop/src-tauri/gen/android/app/build/outputs/**/*.aab
+            apps/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+            apps/desktop/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
           if-no-files-found: error
           retention-days: 7

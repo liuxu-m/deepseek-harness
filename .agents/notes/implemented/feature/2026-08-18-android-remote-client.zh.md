@@ -28,5 +28,5 @@ Android target 是一个精简的 Tauri 客户端。它创建一个 WebView，�
 
 - Android 打包独立于 Windows 便携式归档，不包含 Node 或 DSH runtime 文件。
 - 首次客户端页面要求输入可访问的远程地址；修改保存地址需要返回设置页或清除应用 WebView 数据。
-- Android 构建机需要 Tauri Android 项目，以及 Android SDK、NDK、Java 和 Gradle 环境；仓库工作流可在 Ubuntu 上提供这些环境，并在 PR 和手动运行时上传 ARM64 APK/AAB artifact。
+- Android 构建机需要 Tauri Android 项目，以及 Android SDK、NDK、Java 和 Gradle 环境；仓库工作流在 Ubuntu 上提供这些环境，从 Actions Secrets 恢复 release keystore，验证 ARM64 APK 签名，并在 PR 和手动运行时上传已签名 APK/AAB artifact。
 - 远程 Web Host 继续作为 session、设置、凭据、workspace 和工具执行的唯一拥有者。
