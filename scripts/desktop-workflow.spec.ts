@@ -1,4 +1,4 @@
-/** Desktop portable workflow policy: one native Windows job, immutable install, deterministic archive. */
+/** Desktop package workflow policy for Windows and manual Android artifacts. */
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -38,6 +38,13 @@ function portableJob(workflow: Record<string, unknown>): Record<string, unknown>
     throw new TypeError('workflow must define the portable job')
   }
   return workflow.jobs.portable
+}
+
+function androidJob(workflow: Record<string, unknown>): Record<string, unknown> {
+  if (!isRecord(workflow.jobs) || !isRecord(workflow.jobs.android)) {
+    throw new TypeError('workflow must define the android job')
+  }
+  return workflow.jobs.android
 }
 
 describe('Desktop portable workflow', () => {
@@ -120,5 +127,27 @@ describe('Desktop portable workflow', () => {
     const retention = stepWith(upload!)['retention-days']
     expect(typeof retention).toBe('string')
     expect(String(retention)).toContain('7')
+  })
+
+  it('builds ARM64 Android APK and AAB only for manual package runs', () => {
+    const workflow = loadWorkflow(WORKFLOW_PATH)
+    const job = androidJob(workflow)
+    const steps = stepsOf(job)
+    expect(job.if).toBe("github.event_name == 'workflow_dispatch'")
+    expect(job['runs-on']).toBe('ubuntu-24.04')
+    expect(steps.some(step => hasRun(step, "'ndk;27.0.12077973'"))).toBe(true)
+    expect(steps.some(step => hasRun(step, 'pnpm run desktop:android:init -- --ci --skip-targets-install'))).toBe(true)
+    expect(steps.some(step => hasRun(step, 'pnpm run desktop:android:build -- --apk --aab --target aarch64'))).toBe(true)
+  })
+
+  it('uploads only Android install artifacts from the manual package job', () => {
+    const workflow = loadWorkflow(WORKFLOW_PATH)
+    const job = androidJob(workflow)
+    const upload = stepsOf(job).find(step => typeof step.uses === 'string' && step.uses.startsWith('actions/upload-artifact@'))
+    expect(upload).toBeDefined()
+    const path = String(stepWith(upload!)['path'])
+    expect(path).toMatch(/\.apk/)
+    expect(path).toMatch(/\.aab/)
+    expect(stepWith(upload!)['retention-days']).toBe(7)
   })
 })

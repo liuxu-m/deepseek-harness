@@ -2,11 +2,19 @@
 
 English | [中文](README.zh.md)
 
-The Windows desktop shell for DeepSeek Harness: a Tauri 2 host process that discovers a compatible Web Host on the loopback default port, supervises the bundled web runtime, and presents it in a native WebView2 window with a tray. The package itself is not published; `scripts/release/build-desktop-portable.ts` assembles the portable ZIP that ships it.
+The Windows desktop shell and Android remote client for DeepSeek Harness. Windows uses Tauri 2 to discover a compatible Web Host on the loopback default port, supervise the bundled web runtime, and present it in a native WebView2 window with a tray. Android loads a protected remote Web Host and never runs DSH tools locally. The package itself is not published; `scripts/release/build-desktop-portable.ts` assembles the Windows portable ZIP.
 
 ## Supported baseline
 
 Windows 10 or 11 (x64) with the Microsoft Edge WebView2 runtime (preinstalled on current Windows). The portable archive contains a bundled Node runtime (`node/node.exe`) and the production runtime closure (`runtime/`), so no Node.js installation, npm, or network is needed to run it. macOS and Linux are unsupported in v1; installers, auto-update, and a custom `$DSH_HOME` are unsupported.
+
+## Android remote client
+
+The Android shell starts with a compact URL page and then opens the configured remote Host in its WebView. It accepts only HTTPS URLs. The phone is a presentation client: sessions, credentials, workspaces, Agent execution, filesystem access, and shell tools remain on the computer. At phone widths the Web UI hides the right-side details panel and keeps the conversation in one column.
+
+The built-in web command deliberately rejects public binding, and the Web Host has no TLS or authentication. Put an access-controlled HTTPS reverse proxy or authenticated private-network endpoint in front of the computer's loopback Host; never expose the raw DSH port.
+
+After installing Rust and the Android SDK/NDK, initialize the generated Android project once with `pnpm run desktop:android:init`. Build installable APK and AAB artifacts with `pnpm run desktop:android:build`.
 
 ## Archive layout
 
@@ -40,3 +48,7 @@ Per-user state lives under `%USERPROFILE%\.dsh` (the default home; the shell nev
 Run the native tests with `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`. The packaged acceptance smoke is `scripts/smoke-desktop-portable.ps1`, invoked by the `desktop-portable` GitHub Actions workflow on `windows-2025` after `pnpm run desktop:build`. It extracts the archive into a path with spaces and CJK characters, isolates the user profile, strips development tools from the child PATH, and exercises owned start, attach, close-to-tray, crash cleanup, occupied-port fallback, image-prompt admission, and a leak scan.
 
 The shell is unsigned in development; Windows SmartScreen or antivirus may warn on a locally built copy.
+
+## GitHub Actions packaging
+
+The workflow `.github/workflows/desktop-portable.yml` keeps the Windows portable build on `windows-2025`. A manual workflow run also starts an independent Android ARM64 job on Ubuntu, which uploads an installable APK and a Play-compatible AAB as Actions artifacts. Trigger both packages with `gh workflow run desktop-portable.yml --ref <branch>` or the GitHub Actions UI. These artifacts are unsigned unless Android signing secrets and a release signing step are configured.

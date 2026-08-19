@@ -3,7 +3,7 @@
 # (SOURCE_DATE_EPOCH fixed), so master/manual runs are reproducible; PR uploads
 # carry seven-day retention. See docs/superpowers/plans/2026-08-14-windows-desktop-host.md
 # Task 13 and the workflow policy test scripts/desktop-workflow.spec.ts.
-name: Desktop portable (Windows)
+name: Desktop packages (Windows and Android)
 
 on:
   pull_request:
@@ -136,3 +136,67 @@ jobs:
             dist/desktop/stage/README.txt
           if-no-files-found: error
           retention-days: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' && 0 || 7 }}
+
+  android:
+    if: github.event_name == 'workflow_dispatch'
+    name: remote client android arm64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android API, build tools, and NDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.0.12077973'
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: android-arm64-${{ hashFiles('pnpm-lock.yaml', 'apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/tauri.conf.json') }}
+          restore-keys: |
+            android-arm64-
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Android Gradle project
+        run: pnpm run desktop:android:init -- --ci --skip-targets-install
+
+      - name: Build ARM64 APK and AAB
+        run: pnpm run desktop:android:build -- --apk --aab --target aarch64
+
+      - name: Upload Android APK and AAB
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-android-arm64-${{ github.sha }}
+          path: |
+            apps/desktop/src-tauri/gen/android/app/build/outputs/**/*.apk
+            apps/desktop/src-tauri/gen/android/app/build/outputs/**/*.aab
+          if-no-files-found: error
+          retention-days: 7

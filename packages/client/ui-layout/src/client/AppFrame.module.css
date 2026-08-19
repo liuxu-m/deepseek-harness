@@ -48,6 +48,15 @@
   border-left: none;
 }
 
+/* Details are a desktop inspection surface. Keep the conversation single-column
+   on phones even if a stored panel preference is restored after rotation. */
+@media (max-width: 767px) {
+  .detailsCol,
+  .handle[data-side='details'] {
+    display: none;
+  }
+}
+
 /* Drag handles are frame children (columns clip overflow): an 8px hit strip
    centered on the column border via inline left, above column content. Details
    adds a visible 12x32 pill at vertical center; sidebar keeps only the hit strip. */

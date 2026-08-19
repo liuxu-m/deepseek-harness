@@ -152,7 +152,10 @@
   },
   "scripts": {
     "cargo:test": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "tauri:build": "cargo tauri build --config src-tauri/tauri.conf.json"
+    "tauri:build": "cargo tauri build --config src-tauri/tauri.conf.json",
+    "android:init": "pnpm exec tauri android init",
+    "android:dev": "pnpm exec tauri android dev",
+    "android:build": "pnpm exec tauri android build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

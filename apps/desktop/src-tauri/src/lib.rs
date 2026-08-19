@@ -1,4 +1,4 @@
-//! DeepSeek Harness desktop shell entry point.
+//! DeepSeek Harness desktop and Android client shell entry point.
 //!
 //! This tray-hosted shell (Tasks 6..10) owns the Tauri builder and wires
 //! discovery/supervision (Tasks 7-9) into a single `main` window and system
@@ -14,11 +14,17 @@
 //! which Retry re-runs discovery only after the failed owned tree is confirmed
 //! dead.
 
+#[cfg(windows)]
 pub mod discovery;
+#[cfg(windows)]
 pub mod identity;
+#[cfg(windows)]
 pub mod instance;
+#[cfg(windows)]
 pub mod paths;
+#[cfg(windows)]
 pub mod tray;
+#[cfg(windows)]
 pub mod window;
 
 #[cfg(windows)]
@@ -30,7 +36,11 @@ pub mod supervisor;
 #[cfg(windows)]
 pub mod windows_job;
 
+#[cfg(windows)]
 pub use discovery::{discover, Discovery};
+
+#[cfg(target_os = "android")]
+mod mobile;
 
 #[cfg(windows)]
 use std::sync::{Arc, Mutex};
@@ -51,18 +61,23 @@ pub const MAIN_WINDOW_LABEL: &str = "main";
 #[cfg(windows)]
 const RETRY_TREE_DEAD_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
-/// Run the desktop shell. This is Windows-only: supervision, the tray, and the
-/// Host window all depend on the native Windows process and WebView pieces.
+/// Run the Windows desktop shell with its locally supervised Host process.
 #[cfg(windows)]
 pub fn run() {
     run_windows();
 }
 
-/// A non-Windows build has no host, tray, or window; report loudly rather than
-/// presenting a hollow shell.
-#[cfg(not(windows))]
+/// Run the Android remote client. It loads the local setup page and never starts
+/// a Host process on the phone.
+#[cfg(target_os = "android")]
 pub fn run() {
-    eprintln!("the DeepSeek Harness desktop shell is Windows-only");
+    mobile::run();
+}
+
+/// Other non-Windows targets have no supported shell implementation.
+#[cfg(all(not(windows), not(target_os = "android")))]
+pub fn run() {
+    eprintln!("the DeepSeek Harness shell supports Windows and Android only");
 }
 
 #[cfg(windows)]
