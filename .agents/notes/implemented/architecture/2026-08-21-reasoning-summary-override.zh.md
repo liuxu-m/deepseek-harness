@@ -42,3 +42,19 @@ Status: implemented
 ## 后果
 
 选择启用该路由的部署会向上游呈现 `reasoning { context:"all_turns", summary:"detailed" }`——这正是目的；默认仍是 pi-ai 的 `{"effort"}`/`"auto"` 形态。字段在客户端 provider 配置即可编辑，无需改源码之外的进程。
+
+## 附注（2026-08-21）：真正被拒的字段是 `max_output_tokens`
+
+在把 `reasoning {context, summary}` 对齐且网关**仍**返回 `400 upstream_error` 后，一次离线逐字段实验（同模型 `gpt-5.6-terra`、同 key、经捕获代理）定位了真正拦截点：
+
+| 变体 | 结果 |
+|---|---|
+| Codex 形态，**无 `max_output_tokens`** | 200 |
+| + `max_output_tokens` = 64 / 2048 / 32768 | **400**（三者皆拒） |
+| 去掉 `text`/`stream_options`/`tool_choice`/`parallel_tool_calls` | 200 |
+| 去掉 `reasoning.context` | 200 |
+| harness 形态（带 `max_output_tokens`） | 400 |
+
+即 icode 上游对**任何**携带 `max_output_tokens` 的请求都拒（与值无关）；Codex 从不发送它。`reasoning.summary`/`context`/`text`/`stream_options` 都被证明无关（V4/V5 仍 200）。
+
+**最终修复：** 新增显式开关 profile 布尔字段 `omitMaxTokens?: boolean`；为 true 时同一 `onPayload` 钩子删除 `params.max_output_tokens`。icode 路由设置 `omitMaxTokens: true`（并保留 `reasoningSummary: detailed` 对齐）。`reasoning.context` 注入予以保留（无害、与 Codex 对齐），但不再认为是拦截点。

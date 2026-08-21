@@ -141,6 +141,14 @@ export interface PiAiProviderProfile {
    * here. Applied via the `onPayload` hook after params are built.
    */
   reasoningSummary?: 'auto' | 'detailed' | 'concise' | null
+  /**
+   * Drop the `max_output_tokens` param this route would otherwise send on
+   * OpenAI Responses routes. Some gateways/upstreams (verified: icode
+   * gpt-5.6-terra) reject any request carrying `max_output_tokens` with
+   * `400 upstream_error`, while Codex omits it and succeeds. Opt-in only;
+   * unset routes keep pi-ai's output cap.
+   */
+  omitMaxTokens?: boolean
   /** Prompt-cache retention preference. */
   cacheRetention?: CacheRetention
   /** Streaming transport preference. */
@@ -260,6 +268,7 @@ const profile = z.object({
   reasoning: z.union(THINKING_LEVELS),
   thinkingBudgets,
   reasoningSummary: z.union([z.const('auto'), z.const('detailed'), z.const('concise'), z.const(null)]),
+  omitMaxTokens: z.boolean(),
   cacheRetention: z.union(['none', 'short', 'long']),
   transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto']),
   timeoutMs: z.natural(),

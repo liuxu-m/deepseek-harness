@@ -42,3 +42,19 @@ Add an optional `reasoningSummary?: 'auto' | 'detailed' | 'concise' | null` to `
 ## Consequences
 
 Routes that opt in present `reasoning { context:"all_turns", summary:"detailed" }` to their upstream — that is the point; the default stays pi-ai's `{"effort"}`/`"auto"` shape. The field is editable in the client provider config with no process out of band.
+
+## Addendum (2026-08-21): the actual blocking field is `max_output_tokens`
+
+After `reasoning {context, summary}` were aligned and the gateway **still** returned `400 upstream_error`, an offline field-by-field experiment (same model `gpt-5.6-terra`, same key, wire through a capture proxy) isolated the true blocker:
+
+| variant | result |
+|---|---|
+| Codex shape, **no `max_output_tokens`** | 200 |
+| + `max_output_tokens` = 64 / 2048 / 32768 | **400** (all three) |
+| minus `text`/`stream_options`/`tool_choice`/`parallel_tool_calls` | 200 |
+| minus `reasoning.context` | 200 |
+| harness shape (with `max_output_tokens`) | 400 |
+
+So the icode upstream rejects **any** request carrying `max_output_tokens`, regardless of value; Codex omits it. `reasoning.summary`/`context`/`text`/`stream_options` turned out to be irrelevant (V4/V5 still 200).
+
+**Final fix:** add an opt-in profile boolean `omitMaxTokens?: boolean`; when true, the same `onPayload` hook deletes `params.max_output_tokens`. The icode routes set `omitMaxTokens: true` (plus keep `reasoningSummary: detailed` for parity). `reasoning.context` wiring is retained (harmless, Codex-aligned) but no longer claimed as the blocker.

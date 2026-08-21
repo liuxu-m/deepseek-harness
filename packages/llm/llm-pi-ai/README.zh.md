@@ -158,6 +158,8 @@ Provider 路由可设置 `userAgentOverride` 以将该路由的 `user-agent` 替
 
 Provider 路由也可设置 `reasoningSummary`（`'auto' | 'detailed' | 'concise' | null`）以覆盖其在 OpenAI Responses 路由上发送的 `reasoning.summary`。这是显式启用：只有设置了它的路由才注入覆盖钩子，未设置的路由保持 pi-ai 默认的 `"auto"`。某些 Codex 兼容网关的上游只接受 `"detailed"`（对 `"auto"` 返回 `400 upstream_error`），因此设置 `reasoningSummary: detailed` 可使该路由与官方 Codex 对齐。
 
+Provider 路由还可设置 `omitMaxTokens: true` 以从 OpenAI Responses 请求中删除 `max_output_tokens` 参数。2026-08-21 实测：icode 的 `gpt-5.6-terra` 上游对**任何**携带 `max_output_tokens` 的请求返回 `400 upstream_error`（无论值 64 / 2048 / 32768 皆被拒），而省去该字段的完全相同的请求成功。官方 Codex 从不发送它。仅显式启用；未设置的路由保持 pi-ai 正常的输出上限。
+
 ## 依赖体量
 
 pi-ai 会安装多个提供方 SDK，并延迟加载 catalog 模型所选的 SDK。该可选适配器包将依赖体量隔离在自身范围内。

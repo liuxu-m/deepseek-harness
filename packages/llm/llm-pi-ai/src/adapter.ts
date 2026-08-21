@@ -108,17 +108,23 @@ function profileOptions(
 }
 
 /**
- * An `onPayload` hook that aligns the built `reasoning` object with what a
- * Codex-compatible gateway/upstream accepts, for routes whose profile sets
- * {@link PiAiProviderProfile.reasoningSummary}. pi-ai emits `reasoning.summary`
- * as `"auto"` and omits `reasoning.context`; gateways that reject that shape
- * (e.g. an icode upstream that only accepts `summary:"detailed"` and a
- * `context: "all_turns"`) get both here, after params are built. Unset
- * profiles never install this hook, keeping their wire identical.
+ * An `onPayload` hook that aligns the built openai-responses `params` with
+ * what a Codex-compatible gateway/upstream accepts, for routes whose profile
+ * opts in via {@link PiAiProviderProfile.reasoningSummary} and/or
+ * {@link PiAiProviderProfile.omitMaxTokens}. pi-ai defaults `reasoning.summary`
+ * to `"auto"` (omitting `context`) and always sends `max_output_tokens`; some
+ * gateways (verified: the icode upstream) reject any request that carries
+ * `max_output_tokens` with `400 upstream_error` — Codex omits it. This hook
+ * rewrites the built params; an unset profile installs nothing and keeps the
+ * wire byte-identical.
  */
-function overrideReasoningSummary(summary: 'auto' | 'detailed' | 'concise' | null) {
+function codexWireHook(profile: ResolvedPiAiProviderProfile) {
+  const summary = profile.reasoningSummary
+  const omitMax = profile.omitMaxTokens === true
   return (payload: unknown): unknown => {
-    if (payload !== null && typeof payload === 'object') {
+    if (payload === null || typeof payload !== 'object') return payload
+    if (omitMax) delete (payload as Record<string, unknown>).max_output_tokens
+    if (summary !== undefined) {
       const reasoning = (payload as { reasoning?: unknown }).reasoning
       if (reasoning !== null && typeof reasoning === 'object') {
         const target = reasoning as { summary?: unknown; context?: unknown }
@@ -406,7 +412,9 @@ export class PiAiAdapter extends LlmAdapter {
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
-        ...profile.reasoningSummary === undefined ? {} : { onPayload: overrideReasoningSummary(profile.reasoningSummary) },
+        ...profile.reasoningSummary === undefined && profile.omitMaxTokens === undefined
+          ? {}
+          : { onPayload: codexWireHook(profile) },
         signal: watchdog.signal,
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions, unless the profile

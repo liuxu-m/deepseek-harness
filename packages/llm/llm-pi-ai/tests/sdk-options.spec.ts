@@ -48,15 +48,19 @@ async function drain(adapter: PiAiAdapter): Promise<StreamChunk[]> {
   return chunks
 }
 
-/** An openai-responses hand-declared route that optionally sets `reasoningSummary`. */
-function responsesAdapter(reasoningSummary?: 'auto' | 'detailed' | 'concise' | null): PiAiAdapter {
+/** An openai-responses hand-declared route that optionally sets codex-wire fields. */
+function responsesAdapter(opts: {
+  reasoningSummary?: 'auto' | 'detailed' | 'concise' | null
+  omitMaxTokens?: boolean
+} = {}): PiAiAdapter {
   return new PiAiAdapter({
     profiles: () => resolveProfiles({
       'local-gateway': {
         api: 'openai-responses',
         baseURL: 'http://127.0.0.1:9/v1',
         models: [{ id: 'local-model', contextWindow: 8192, maxTokens: 1024 }],
-        ...reasoningSummary === undefined ? {} : { reasoningSummary },
+        ...opts.reasoningSummary === undefined ? {} : { reasoningSummary: opts.reasoningSummary },
+        ...opts.omitMaxTokens === undefined ? {} : { omitMaxTokens: opts.omitMaxTokens },
       },
     }),
     resolveApiKey: () => Promise.resolve('test-key'),
@@ -99,7 +103,7 @@ describe('pi-ai reasoningSummary override', () => {
   it('installs onPayload that rewrites reasoning.summary and adds context when the route configures one', async () => {
     openaiResponsesStream.mockImplementation(() => { throw new Error('mock SDK boundary') })
 
-    await drain(responsesAdapter('detailed'))
+    await drain(responsesAdapter({ reasoningSummary: 'detailed' }))
 
     const third = openaiResponsesStream.mock.calls[0]?.[2] as {
       onPayload?: (payload: unknown) => unknown
@@ -112,6 +116,21 @@ describe('pi-ai reasoningSummary override', () => {
     expect(out.reasoning.summary).toBe('detailed')
     expect(out.reasoning.context).toBe('all_turns')
     expect((out as typeof payload).include).toEqual(['reasoning.encrypted_content'])
+  })
+
+  it('drops max_output_tokens when the route opts into omitMaxTokens', async () => {
+    openaiResponsesStream.mockImplementation(() => { throw new Error('mock SDK boundary') })
+
+    await drain(responsesAdapter({ omitMaxTokens: true }))
+
+    const third = openaiResponsesStream.mock.calls[0]?.[2] as {
+      onPayload?: (payload: unknown) => unknown
+    }
+    expect(typeof third?.onPayload).toBe('function')
+    const payload = { reasoning: { effort: 'high', summary: 'auto' }, max_output_tokens: 32768, store: false }
+    const out = third.onPayload!(structuredClone(payload)) as Record<string, unknown>
+    expect(out.max_output_tokens).toBeUndefined()
+    expect(out.store).toBe(false)
   })
 
   it('leaves reasoning.summary untouched when no override is configured', async () => {
