@@ -96,7 +96,7 @@ describe('pi-ai SDK retry boundary', () => {
 })
 
 describe('pi-ai reasoningSummary override', () => {
-  it('installs onPayload that rewrites reasoning.summary when the route configures one', async () => {
+  it('installs onPayload that rewrites reasoning.summary and adds context when the route configures one', async () => {
     openaiResponsesStream.mockImplementation(() => { throw new Error('mock SDK boundary') })
 
     await drain(responsesAdapter('detailed'))
@@ -106,8 +106,11 @@ describe('pi-ai reasoningSummary override', () => {
     }
     expect(typeof third?.onPayload).toBe('function')
     const payload = { reasoning: { effort: 'high', summary: 'auto' }, include: ['reasoning.encrypted_content'] }
-    const out = third.onPayload!(structuredClone(payload))
-    expect((out as typeof payload).reasoning.summary).toBe('detailed')
+    const out = third.onPayload!(structuredClone(payload)) as typeof payload & {
+      reasoning: { summary: string; context?: string }
+    }
+    expect(out.reasoning.summary).toBe('detailed')
+    expect(out.reasoning.context).toBe('all_turns')
     expect((out as typeof payload).include).toEqual(['reasoning.encrypted_content'])
   })
 

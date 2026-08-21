@@ -108,18 +108,22 @@ function profileOptions(
 }
 
 /**
- * An `onPayload` hook that overrides the built `reasoning.summary` for routes
- * whose profile sets {@link PiAiProviderProfile.reasoningSummary}. pi-ai emits
- * `"auto"` by default; gateways that reject that (e.g. an icode upstream that
- * only accepts `"detailed"`) get the configured value here, after params are
- * built. Unset profiles never install this hook, keeping their wire identical.
+ * An `onPayload` hook that aligns the built `reasoning` object with what a
+ * Codex-compatible gateway/upstream accepts, for routes whose profile sets
+ * {@link PiAiProviderProfile.reasoningSummary}. pi-ai emits `reasoning.summary`
+ * as `"auto"` and omits `reasoning.context`; gateways that reject that shape
+ * (e.g. an icode upstream that only accepts `summary:"detailed"` and a
+ * `context: "all_turns"`) get both here, after params are built. Unset
+ * profiles never install this hook, keeping their wire identical.
  */
 function overrideReasoningSummary(summary: 'auto' | 'detailed' | 'concise' | null) {
   return (payload: unknown): unknown => {
     if (payload !== null && typeof payload === 'object') {
       const reasoning = (payload as { reasoning?: unknown }).reasoning
       if (reasoning !== null && typeof reasoning === 'object') {
-        ;(reasoning as { summary?: unknown }).summary = summary
+        const target = reasoning as { summary?: unknown; context?: unknown }
+        target.summary = summary
+        target.context = 'all_turns'
       }
     }
     return payload
