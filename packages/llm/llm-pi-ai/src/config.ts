@@ -134,6 +134,13 @@ export interface PiAiProviderProfile {
   reasoning?: ModelThinkingLevel
   /** Token budgets used by reasoning providers that support them. */
   thinkingBudgets?: ThinkingBudgets
+  /**
+   * Override the `reasoning.summary` OpenAPI Responses value this route emits.
+   * Omission leaves pi-ai's default (`"auto"`); a gateway that rejects that
+   * default (e.g. an icode upstream that only accepts `"detailed"`) sets one
+   * here. Applied via the `onPayload` hook after params are built.
+   */
+  reasoningSummary?: 'auto' | 'detailed' | 'concise' | null
   /** Prompt-cache retention preference. */
   cacheRetention?: CacheRetention
   /** Streaming transport preference. */
@@ -252,6 +259,7 @@ const profile = z.object({
   userAgentOverride: z.string(),
   reasoning: z.union(THINKING_LEVELS),
   thinkingBudgets,
+  reasoningSummary: z.union([z.const('auto'), z.const('detailed'), z.const('concise'), z.const(null)]),
   cacheRetention: z.union(['none', 'short', 'long']),
   transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto']),
   timeoutMs: z.natural(),

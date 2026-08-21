@@ -108,6 +108,25 @@ function profileOptions(
 }
 
 /**
+ * An `onPayload` hook that overrides the built `reasoning.summary` for routes
+ * whose profile sets {@link PiAiProviderProfile.reasoningSummary}. pi-ai emits
+ * `"auto"` by default; gateways that reject that (e.g. an icode upstream that
+ * only accepts `"detailed"`) get the configured value here, after params are
+ * built. Unset profiles never install this hook, keeping their wire identical.
+ */
+function overrideReasoningSummary(summary: 'auto' | 'detailed' | 'concise' | null) {
+  return (payload: unknown): unknown => {
+    if (payload !== null && typeof payload === 'object') {
+      const reasoning = (payload as { reasoning?: unknown }).reasoning
+      if (reasoning !== null && typeof reasoning === 'object') {
+        ;(reasoning as { summary?: unknown }).summary = summary
+      }
+    }
+    return payload
+  }
+}
+
+/**
  * The profile default this exact model can actually take, for DESCRIBING it.
  * A configured level the model does not support yields none rather than
  * throwing: `resolveModel` builds the model catalog, and a catalog that fails
@@ -383,6 +402,7 @@ export class PiAiAdapter extends LlmAdapter {
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
+        ...profile.reasoningSummary === undefined ? {} : { onPayload: overrideReasoningSummary(profile.reasoningSummary) },
         signal: watchdog.signal,
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions, unless the profile

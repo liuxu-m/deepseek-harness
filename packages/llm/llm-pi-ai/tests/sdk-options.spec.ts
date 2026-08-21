@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 
 const streamSimple = vi.hoisted(() => vi.fn())
+const openaiResponsesStream = vi.hoisted(() => vi.fn())
 
 // A hand-declared route is built by `createProvider` over the protocol table in
 // `src/provider.ts`, so the table's lazy api module is the SDK boundary this
@@ -11,10 +12,17 @@ vi.mock('@earendil-works/pi-ai/api/openai-completions.lazy', () => ({
   openAICompletionsApi: () => ({ stream: streamSimple, streamSimple }),
 }))
 
+vi.mock('@earendil-works/pi-ai/api/openai-responses.lazy', () => ({
+  openAIResponsesApi: () => ({ stream: openaiResponsesStream, streamSimple: openaiResponsesStream }),
+}))
+
 import { PiAiAdapter } from '../src/adapter.ts'
 import { resolveProfiles } from '../src/config.ts'
 
-afterEach(() => { streamSimple.mockReset() })
+afterEach(() => {
+  streamSimple.mockReset()
+  openaiResponsesStream.mockReset()
+})
 
 /** A hand-declared OpenAI-compatible route with one fully described model. */
 function gatewayAdapter(): PiAiAdapter {
@@ -38,6 +46,21 @@ async function drain(adapter: PiAiAdapter): Promise<StreamChunk[]> {
     messages: [],
   })) chunks.push(chunk)
   return chunks
+}
+
+/** An openai-responses hand-declared route that optionally sets `reasoningSummary`. */
+function responsesAdapter(reasoningSummary?: 'auto' | 'detailed' | 'concise' | null): PiAiAdapter {
+  return new PiAiAdapter({
+    profiles: () => resolveProfiles({
+      'local-gateway': {
+        api: 'openai-responses',
+        baseURL: 'http://127.0.0.1:9/v1',
+        models: [{ id: 'local-model', contextWindow: 8192, maxTokens: 1024 }],
+        ...reasoningSummary === undefined ? {} : { reasoningSummary },
+      },
+    }),
+    resolveApiKey: () => Promise.resolve('test-key'),
+  })
 }
 
 describe('pi-ai SDK retry boundary', () => {
@@ -69,5 +92,31 @@ describe('pi-ai SDK retry boundary', () => {
       contextWindow: 8192,
       maxTokens: 1024,
     })
+  })
+})
+
+describe('pi-ai reasoningSummary override', () => {
+  it('installs onPayload that rewrites reasoning.summary when the route configures one', async () => {
+    openaiResponsesStream.mockImplementation(() => { throw new Error('mock SDK boundary') })
+
+    await drain(responsesAdapter('detailed'))
+
+    const third = openaiResponsesStream.mock.calls[0]?.[2] as {
+      onPayload?: (payload: unknown) => unknown
+    }
+    expect(typeof third?.onPayload).toBe('function')
+    const payload = { reasoning: { effort: 'high', summary: 'auto' }, include: ['reasoning.encrypted_content'] }
+    const out = third.onPayload!(structuredClone(payload))
+    expect((out as typeof payload).reasoning.summary).toBe('detailed')
+    expect((out as typeof payload).include).toEqual(['reasoning.encrypted_content'])
+  })
+
+  it('leaves reasoning.summary untouched when no override is configured', async () => {
+    openaiResponsesStream.mockImplementation(() => { throw new Error('mock SDK boundary') })
+
+    await drain(responsesAdapter())
+
+    const third = openaiResponsesStream.mock.calls[0]?.[2] as { onPayload?: unknown }
+    expect(third.onPayload).toBeUndefined()
   })
 })

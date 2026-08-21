@@ -156,6 +156,8 @@ profile 的 `models` 列表是*替换*该路由已安装 catalog，而不是扩�
 
 Provider 路由可设置 `userAgentOverride` 以将该路由的 `user-agent` 替换为部署必须向网关出示的确切值（例如面向 Codex 兼容网关的客户端指纹）。未设置的每个路由默认仍保持强制的 `deepseek-harness/<版本> (+url)`。`originator`、`openai-beta` 等其他客户端身份头照常经该路由的 `headers` 配置；`userAgentOverride` 为空或含换行会在解析时被拒绝。模型发现（`GET /models`）保持默认归因——它不是模型请求，无需客户端指纹。
 
+Provider 路由也可设置 `reasoningSummary`（`'auto' | 'detailed' | 'concise' | null`）以覆盖其在 OpenAI Responses 路由上发送的 `reasoning.summary`。这是显式启用：只有设置了它的路由才注入覆盖钩子，未设置的路由保持 pi-ai 默认的 `"auto"`。某些 Codex 兼容网关的上游只接受 `"detailed"`（对 `"auto"` 返回 `400 upstream_error`），因此设置 `reasoningSummary: detailed` 可使该路由与官方 Codex 对齐。
+
 ## 依赖体量
 
 pi-ai 会安装多个提供方 SDK，并延迟加载 catalog 模型所选的 SDK。该可选适配器包将依赖体量隔离在自身范围内。

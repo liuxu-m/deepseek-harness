@@ -48,6 +48,18 @@ describe('userAgentOverride boundary', () => {
   })
 })
 
+describe('reasoningSummary boundary', () => {
+  it('accepts each legal OpenAI Responses summary value', () => {
+    for (const value of ['auto', 'detailed', 'concise', null]) {
+      expect(() => routeWith({ reasoningSummary: value })()).not.toThrow()
+    }
+  })
+
+  it('refuses a summary value pi-ai does not know', () => {
+    expect(routeWith({ reasoningSummary: 'verbose' })).toThrow(/expected/)
+  })
+})
+
 describe('modality schema boundary', () => {
   it('rejects a modality pi-ai does not know, at either level', () => {
     expect(configWith({ input: ['audio'] })).toThrow(/expected/)
