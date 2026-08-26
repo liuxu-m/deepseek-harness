@@ -159,7 +159,16 @@ describe('node artifact extraction', () => {
 describe('portable build plan', () => {
   it('orders the tauri no-bundle exe build and the runtime build', () => {
     expect(planPortableBuild({ package: '@deepseek-ai/dsh-desktop', runtimeStage: 'dist/desktop/runtime' })).toEqual([
-      { command: 'pnpm', args: ['--filter', '@deepseek-ai/dsh-desktop', 'exec', 'tauri', 'build', '--no-bundle'] },
+      {
+        command: process.execPath,
+        args: [
+          'apps/desktop/node_modules/@tauri-apps/cli/tauri.js',
+          'build',
+          '--no-bundle',
+          '--config',
+          'apps/desktop/src-tauri/tauri.conf.json',
+        ],
+      },
       { command: 'pnpm', args: ['run', 'desktop:runtime', '--', '--out', 'dist/desktop/runtime'] },
     ])
   })

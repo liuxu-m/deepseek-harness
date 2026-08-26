@@ -262,9 +262,18 @@ export interface PortablePlanInput {
  * @param input - package identity and runtime stage.
  * @returns the exe-build and runtime commands in order.
  */
-export function planPortableBuild({ package: pkg, runtimeStage }: PortablePlanInput): PlannedCommand[] {
+export function planPortableBuild({ runtimeStage }: PortablePlanInput): PlannedCommand[] {
   return [
-    { command: 'pnpm', args: ['--filter', pkg, 'exec', 'tauri', 'build', '--no-bundle'] },
+    {
+      command: process.execPath,
+      args: [
+        'apps/desktop/node_modules/@tauri-apps/cli/tauri.js',
+        'build',
+        '--no-bundle',
+        '--config',
+        'apps/desktop/src-tauri/tauri.conf.json',
+      ],
+    },
     { command: 'pnpm', args: ['run', 'desktop:runtime', '--', '--out', runtimeStage] },
   ]
 }
