@@ -43,13 +43,13 @@ DeepSeek Harness Desktop.exe
 
 ### 数据共享与路径
 
-桌面 Host 使用默认 Harness home `%USERPROFILE%\.dsh`，通过仓库既有的 [`home-paths` 解析器](../../implemented/architecture/2026-07-24-single-harness-home-resolver.md) 解析。这与 `$DSH_HOME` 未设置时的 `dsh web` 是同一个根，因此 `profiles/`、`cordis.patch.yml`、`settings.yaml`、`.credentials.yaml`、`.env`、会话日志、投影、附件、workspace、agent preset 与匿名身份被直接共享——不做任何复制或同步。初始 Agent 工作目录是 `%USERPROFILE%`，随后由既有 Workspace UI 选择项目。日志写入 `%LOCALAPPDATA%\DeepSeek Harness\logs`（`desktop.log` 为外壳事件、`host.log` 为受主管监控的 host 输出），绝不写入便携解压目录。便携目录只包含 EXE、`node/`、`runtime/`、README.txt、LICENSE、THIRD_PARTY_NOTICES.txt 与 VERSION.json。
+桌面 Host 使用默认 Harness home `%USERPROFILE%\.dsh`，通过仓库既有的 [`home-paths` 解析器](../../implemented/architecture/2026-07-24-single-harness-home-resolver.zh.md) 解析。这与 `$DSH_HOME` 未设置时的 `dsh web` 是同一个根，因此 `profiles/`、`cordis.patch.yml`、`settings.yaml`、`.credentials.yaml`、`.env`、会话日志、投影、附件、workspace、agent preset 与匿名身份被直接共享——不做任何复制或同步。初始 Agent 工作目录是 `%USERPROFILE%`，随后由既有 Workspace UI 选择项目。日志写入 `%LOCALAPPDATA%\DeepSeek Harness\logs`（`desktop.log` 为外壳事件、`host.log` 为受主管监控的 host 输出），绝不写入便携解压目录。便携目录只包含 EXE、`node/`、`runtime/`、README.txt、LICENSE、THIRD_PARTY_NOTICES.txt 与 VERSION.json。
 
 ### 构建与打包
 
-发布流水线构建当前仓库修订：Host、Client 与 Web 构件，再按仓库自有的 deploy root 生成仅生产依赖闭包（[单一文件可执行 SDK 运行时](../../implemented/architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.md) 建立的模式），随后加入捆绑的 Node 运行时、Tauri EXE、许可证与构建元数据。`scripts/release/build-desktop-runtime.ts` 产出 runtime 闭包；`scripts/release/build-desktop-portable.ts` 组装确定性的便携 ZIP，其使用固定 Node v24.11.1 carrier（以 SHA-256 校验）、`SOURCE_DATE_EPOCH` 保证可复现构建，并经 `RUSTUP_TOOLCHAIN` 固定 MSVC Rust 工具链。`VERSION.json` 记录 `product`、`dshVersion`、`gitCommit`、`nodeVersion`、`desktopProtocol`、`target` 与 `buildTime`。构件只从仓库源码组装——不下载 npm 发布版 DSH，也不做构建后的 `lib/index.js` 覆盖。产物是一个 Windows x64 便携 ZIP，其 SHA-256 由 `desktop-portable` GitHub Actions 工作流（windows-2025）校验，并用 `scripts/smoke-desktop-portable.ps1` 冒烟验证。
+发布流水线构建当前仓库修订：Host、Client 与 Web 构件，再按仓库自有的 deploy root 生成仅生产依赖闭包（[单一文件可执行 SDK 运行时](../../implemented/architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.zh.md) 建立的模式），随后加入捆绑的 Node 运行时、Tauri EXE、许可证与构建元数据。`scripts/release/build-desktop-runtime.ts` 产出 runtime 闭包；`scripts/release/build-desktop-portable.ts` 组装确定性的便携 ZIP，其使用固定 Node v24.11.1 carrier（以 SHA-256 校验）、`SOURCE_DATE_EPOCH` 保证可复现构建，并经 `RUSTUP_TOOLCHAIN` 固定 MSVC Rust 工具链。`VERSION.json` 记录 `product`、`dshVersion`、`gitCommit`、`nodeVersion`、`desktopProtocol`、`target` 与 `buildTime`。构件只从仓库源码组装——不下载 npm 发布版 DSH，也不做构建后的 `lib/index.js` 覆盖。产物是一个 Windows x64 便携 ZIP，其 SHA-256 由 `desktop-portable` GitHub Actions 工作流（windows-2025）校验，并用 `scripts/smoke-desktop-portable.ps1` 冒烟验证。
 
-Web profile 提供 `globalImage: true`（见 [global-image 记录](2026-08-14-global-image-web-profile.md)），因此图片型提示无需图片能力模型即可被受理。旧的 `desktop/` Pake + PowerShell 原型已移除；Pake CLI、npm 运行时下载、补丁重放与 PowerShell 生命周期脚本都不属于正式构建链。
+Web profile 提供 `globalImage: true`（见 [global-image 记录](2026-08-14-global-image-web-profile.zh.md)），因此图片型提示无需图片能力模型即可被受理。旧的 `desktop/` Pake + PowerShell 原型已移除；Pake CLI、npm 运行时下载、补丁重放与 PowerShell 生命周期脚本都不属于正式构建链。
 
 ### v1 范围
 
@@ -75,7 +75,7 @@ Windows x64 便携 ZIP；机器需要 WebView2 Runtime（Windows 10/11）；无�
 
 ### 把数据复制或迁移到独立桌面 home
 
-隔离很干净。直接拒绝：这违背“桌面端与 CLI 显示相同设置、会话与 workspace”的要求，也重新制造了[单一 Harness-home 解析器](../../implemented/architecture/2026-07-24-single-harness-home-resolver.md) 所防止的数据分裂。
+隔离很干净。直接拒绝：这违背“桌面端与 CLI 显示相同设置、会话与 workspace”的要求，也重新制造了[单一 Harness-home 解析器](../../implemented/architecture/2026-07-24-single-harness-home-resolver.zh.md) 所防止的数据分裂。
 
 ## Consequences
 

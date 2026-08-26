@@ -1,100 +1,178 @@
-/** Closure diagnostics: runtimeName-derived messages, apps/* discovery, manifest + count. */
-
-import { describe, expect, it } from 'vitest'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { formatClosureSuccess, verifyRuntimeClosure } from './verify-runtime-closure.ts'
+import { dirname, join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { verifyRuntimeClosure } from './verify-runtime-closure.ts'
 
-/**
- * Build a temporary throwaway repository with the given package manifests.
- * @param manifests - repository-relative path to a manifest JSON body.
- * @returns the temporary repository root (callers remove it).
- */
-async function makeRepository(manifests: Record<string, object>): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'closure-'))
-  await writeFile(join(root, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-root', version: '0.1.0-rc.5', private: true }))
-  for (const [relative, manifest] of Object.entries(manifests)) {
+const roots: string[] = []
+
+function fixture(files: Record<string, string | Record<string, unknown>>): string {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-runtime-closure-'))
+  roots.push(root)
+  for (const [relative, value] of Object.entries(files)) {
     const path = join(root, relative)
-    await mkdir(path.slice(0, path.lastIndexOf('/')), { recursive: true })
-    await writeFile(join(root, relative), JSON.stringify(manifest))
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, typeof value === 'string' ? value : `${JSON.stringify(value, null, 2)}\n`)
   }
   return root
 }
 
-describe('verify-runtime-closure diagnostics', () => {
-  it('derives the missing-peer error prefix from the runtime manifest name', async () => {
-    const root = await makeRepository({
-      'apps/desktop/package.json': {
-        name: '@deepseek-ai/dsh-desktop',
-        version: '0.1.0-rc.5',
-        dependencies: { '@deepseek-ai/dsh': 'workspace:^' },
-      },
-      'packages/a/dsh/package.json': {
-        name: '@deepseek-ai/dsh',
-        version: '0.1.0-rc.5',
-        peerDependencies: { '@deepseek-ai/dsh-missing-peer': '*' },
-      },
-      'packages/a/missing-peer/package.json': { name: '@deepseek-ai/dsh-missing-peer', version: '0.1.0-rc.5' },
+const platforms = {
+  'linux-x64': { tag: 'manylinux_2_28_x86_64', executable: 'runtime-linux-x64' },
+  'linux-arm64': { tag: 'manylinux_2_28_aarch64', executable: 'runtime-linux-arm64' },
+  'macos-arm64': { tag: 'macosx_14_0_arm64', executable: 'runtime-macos-arm64' },
+}
+
+function workspace(root: string, name: string, manifest: Record<string, unknown>): void {
+  const packageName = name.replace('@scope/', '')
+  const path = join(root, 'packages/core', packageName, 'package.json')
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${JSON.stringify({ name, ...manifest }, null, 2)}\n`)
+}
+
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
+
+describe('verifyRuntimeClosure', () => {
+  it('requires only plugins active for a Linux or macOS target', async () => {
+    const root = fixture({
+      'python/sdk-runtime/package.json': { name: 'runtime', dependencies: { '@scope/shared': 'workspace:^' } },
+      'python/sdk-runtime/platforms.json': platforms,
+      'apps/cli/config/agent-presets/standard/agent.cordis.yml': `
+- id: tools
+  name: cordis:group
+  group: true
+  config:
+    - id: shared
+      name: '@scope/shared'
+    - id: linux
+      name: '@scope/linux'
+      disabled: !!js process.platform !== 'linux'
+    - id: macos
+      name: '@scope/macos'
+      disabled: !!js process.platform !== 'darwin'
+`,
     })
-    try {
-      let thrown: unknown
-      try {
-        await verifyRuntimeClosure(root, 'apps/desktop/package.json')
-      } catch (caught) {
-        thrown = caught
-      }
-      expect(thrown).toBeInstanceOf(Error)
-      const error = thrown as Error
-      expect(error.message).toContain('required workspace peers are missing from @deepseek-ai/dsh-desktop dependencies:')
-      expect(error.message).toContain('@deepseek-ai/dsh -> @deepseek-ai/dsh-missing-peer')
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
+
+    const result = await verifyRuntimeClosure(root)
+
+    expect(result.presetCount).toBe(1)
+    expect(result.failures).toEqual([
+      'standard preset -> @scope/linux (linux-arm64, linux-x64)',
+      'standard preset -> @scope/macos (macos-arm64)',
+    ])
   })
 
-  it('discovers workspace packages under apps/ as members of the closure', async () => {
-    const root = await makeRepository({
-      'apps/desktop/package.json': {
-        name: '@deepseek-ai/dsh-desktop',
-        version: '0.1.0-rc.5',
-        dependencies: { '@deepseek-ai/dsh': 'workspace:^' },
-      },
-      'apps/web/package.json': { name: '@deepseek-ai/dsh-web-frontend', version: '0.1.0-rc.5' },
-      'packages/a/dsh/package.json': {
-        name: '@deepseek-ai/dsh',
-        version: '0.1.0-rc.5',
-        dependencies: { '@deepseek-ai/dsh-web-frontend': 'workspace:^' },
-      },
+  it('treats an unsupported disabled expression as active on every target', async () => {
+    const root = fixture({
+      'python/sdk-runtime/package.json': { name: 'runtime', dependencies: {} },
+      'python/sdk-runtime/platforms.json': platforms,
+      'apps/cli/config/agent-presets/standard/agent.cordis.yml': `
+- id: conditional
+  name: '@scope/conditional'
+  disabled: !!js process.env.DSH_DISABLE_CONDITIONAL === '1'
+`,
     })
-    try {
-      // The @deepseek-ai/dsh-web-frontend dependency lives under apps/, so the
-      // closure only counts it if apps/ participates in workspace discovery.
-      const result = await verifyRuntimeClosure(root, 'apps/desktop/package.json')
-      expect(result.runtimeName).toBe('@deepseek-ai/dsh-desktop')
-      expect(result.packageCount).toBe(2)
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
+
+    const result = await verifyRuntimeClosure(root)
+
+    expect(result.failures).toEqual([
+      'standard preset -> @scope/conditional (linux-arm64, linux-x64, macos-arm64)',
+    ])
   })
 
-  it('reports the manifest path and package count on success', async () => {
-    const root = await makeRepository({
-      'apps/desktop/package.json': {
-        name: '@deepseek-ai/dsh-desktop',
-        version: '0.1.0-rc.5',
-        dependencies: { '@deepseek-ai/dsh': 'workspace:^' },
-      },
-      'packages/a/dsh/package.json': { name: '@deepseek-ai/dsh', version: '0.1.0-rc.5' },
+  it('does not interpret an ordinary plugin array config as nested Loader entries', async () => {
+    const root = fixture({
+      'python/sdk-runtime/package.json': { name: 'runtime', dependencies: { '@scope/plugin': 'workspace:^' } },
+      'python/sdk-runtime/platforms.json': platforms,
+      'apps/cli/config/agent-presets/standard/agent.cordis.yml': `
+- id: plugin
+  name: '@scope/plugin'
+  config:
+    - name: '@scope/config-value'
+`,
     })
-    try {
-      const result = await verifyRuntimeClosure(root, 'apps/desktop/package.json')
-      expect(result.packageCount).toBe(1)
-      const message = formatClosureSuccess(result)
-      expect(message).toContain('apps/desktop/package.json')
-      expect(message).toContain('1')
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
+
+    const result = await verifyRuntimeClosure(root)
+
+    expect(result.failures).toEqual([])
+  })
+
+  it('requires preset plugins to be linked from the workspace', async () => {
+    const root = fixture({
+      'python/sdk-runtime/package.json': { name: 'runtime', dependencies: { '@scope/plugin': '1.2.3' } },
+      'python/sdk-runtime/platforms.json': platforms,
+      'apps/cli/config/agent-presets/standard/agent.cordis.yml': `
+- id: plugin
+  name: '@scope/plugin'
+`,
+    })
+
+    const result = await verifyRuntimeClosure(root)
+
+    expect(result.failures).toEqual([
+      'standard preset -> @scope/plugin [runtime dependency is "1.2.3"; expected workspace:] (linux-arm64, linux-x64, macos-arm64)',
+    ])
+  })
+
+  it('fails when no shipped preset is discovered', async () => {
+    const root = fixture({
+      'python/sdk-runtime/package.json': { name: 'runtime', dependencies: {} },
+      'python/sdk-runtime/platforms.json': platforms,
+    })
+
+    const result = await verifyRuntimeClosure(root)
+
+    expect(result.presetCount).toBe(0)
+    expect(result.failures).toEqual([
+      'no agent presets matched apps/cli/config/agent-presets/*/agent.cordis.yml',
+    ])
+  })
+
+  it('fails when the runtime platform manifest has no targets', async () => {
+    const root = fixture({
+      'python/sdk-runtime/package.json': { name: 'runtime', dependencies: {} },
+      'python/sdk-runtime/platforms.json': {},
+      'apps/cli/config/agent-presets/standard/agent.cordis.yml': '[]\n',
+    })
+
+    const result = await verifyRuntimeClosure(root)
+
+    expect(result.failures).toEqual([
+      'python/sdk-runtime/platforms.json defines no runtime targets',
+    ])
+  })
+
+  it('retains the required workspace-peer closure check', async () => {
+    const root = fixture({
+      'python/sdk-runtime/package.json': { name: 'runtime', dependencies: { '@scope/root': 'workspace:^' } },
+      'python/sdk-runtime/platforms.json': platforms,
+      'apps/cli/config/agent-presets/minimal/agent.cordis.yml': '[]\n',
+    })
+    workspace(root, '@scope/root', {
+      peerDependencies: { '@scope/required': 'workspace:^', '@scope/optional': 'workspace:^' },
+      peerDependenciesMeta: { '@scope/optional': { optional: true } },
+    })
+    workspace(root, '@scope/required', {})
+    workspace(root, '@scope/optional', {})
+
+    const result = await verifyRuntimeClosure(root)
+
+    expect(result.workspacePackageCount).toBe(1)
+    expect(result.failures).toEqual(['runtime -> @scope/root -> @scope/required'])
+  })
+
+  it('resolves apps workspace dependencies for a Desktop deployment manifest', async () => {
+    const root = fixture({
+      'apps/desktop/package.json': { name: '@scope/desktop', dependencies: { '@scope/web': 'workspace:^' } },
+      'apps/web/package.json': { name: '@scope/web' },
+    })
+
+    const result = await verifyRuntimeClosure(root, 'apps/desktop/package.json')
+
+    expect(result.workspacePackageCount).toBe(1)
+    expect(result.presetCount).toBe(0)
+    expect(result.failures).toEqual([])
   })
 })

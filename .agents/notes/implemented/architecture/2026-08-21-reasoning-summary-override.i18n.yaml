@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-21-reasoning-summary-override.md
+2026-08-21-reasoning-summary-override.md: f3745968042f5bee1b1f20c43dd1ebf63b8ee8e4
+2026-08-21-reasoning-summary-override.zh.md: 9dc2fe7ed3761d26bcb05b8cc4dd683a2724a83f

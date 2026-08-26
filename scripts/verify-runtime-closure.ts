@@ -1,12 +1,14 @@
 /**
- * Verify that an executable deploy manifest supplies every required workspace
- * peer in its dependency graph. With auto peer installation disabled, a missing
- * root peer can otherwise fail only when Cordis loads the packaged plugin.
+ * Verify that the executable deploy manifest supplies every plugin referenced
+ * by a shipped agent preset and every required workspace peer in its dependency
+ * graph. With auto peer installation disabled, either omission can otherwise
+ * fail only when Cordis loads the packaged plugin.
  */
 import { globSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
+import { isCordisGroupEntry, loadCordisYaml } from './cordis-yaml.ts'
 import { isEntry } from './release/process.ts'
 
 interface PackageManifest {
@@ -22,31 +24,45 @@ interface WorkspacePackage {
   manifest: PackageManifest
 }
 
-/** What a successful closure check establishes. */
-export interface RuntimeClosureResult {
-  /** The deploy manifest's package name, or its repository-relative directory. */
-  readonly runtimeName: string
-  /** The repository-relative manifest path that was verified. */
-  readonly manifestPath: string
-  /** The number of workspace packages in the closed dependency graph. */
-  readonly packageCount: number
+interface RuntimePlatform {
+  tag: string
+  executable: string
 }
 
-/** Workspace locations that may supply a runtime peer or dependency. */
+type RuntimePlatformManifest = Record<string, RuntimePlatform>
+
+const DEFAULT_RUNTIME_MANIFEST = 'python/sdk-runtime/package.json'
+const AGENT_PRESET_GLOB = 'apps/cli/config/agent-presets/*/agent.cordis.yml'
 const WORKSPACE_PATTERNS = ['packages/*/*/package.json', 'vendor/*/package.json', 'apps/*/package.json']
 
+export interface RuntimeClosureResult {
+  failures: string[]
+  presetCount: number
+  workspacePackageCount: number
+  runtimeName: string
+  manifestPath: string
+}
+
 /**
- * Verify that every required workspace peer in the manifest's dependency graph
- * is supplied, throwing an {@link Error} whose messages name `runtimeName`.
- * @param root - the repository root.
- * @param manifestPath - repository-relative deploy manifest path.
- * @returns The closed graph's runtime name, manifest path, and package count.
+ * Check that the runtime manifest contains every shipped-preset plugin and workspace peer.
+ * @param root repository root containing the runtime manifest and shipped presets.
+ * @param manifestPath runtime manifest path relative to {@link root}.
+ * @returns the discovered preset count, reachable workspace package count, and violations.
  */
-export async function verifyRuntimeClosure(root: string, manifestPath: string): Promise<RuntimeClosureResult> {
-  const runtimeManifest = (await readJson(resolve(root, manifestPath))) as PackageManifest
-  const runtimeName = runtimeManifest.name ?? dirname(manifestPath)
+export async function verifyRuntimeClosure(
+  root: string,
+  manifestPath = DEFAULT_RUNTIME_MANIFEST,
+): Promise<RuntimeClosureResult> {
+  const runtimeManifest = await loadManifest(resolve(root, manifestPath))
+  const runtimeName = runtimeManifest.name ?? manifestPath
   const workspace = await loadWorkspacePackages(root)
   const runtimeDependencies = runtimeManifest.dependencies ?? {}
+  const validatesPresets = manifestPath === DEFAULT_RUNTIME_MANIFEST
+  const platforms = validatesPresets
+    ? await loadJson<RuntimePlatformManifest>(resolve(root, 'python/sdk-runtime/platforms.json'))
+    : {}
+  const presetPaths = validatesPresets ? globSync(AGENT_PRESET_GLOB, { cwd: root }).sort() : []
+  const targets = Object.keys(platforms).sort()
   const parents = new Map<string, string | undefined>()
   const queue: string[] = []
 
@@ -57,6 +73,11 @@ export async function verifyRuntimeClosure(root: string, manifestPath: string): 
   }
 
   const failures: string[] = []
+  if (validatesPresets) {
+    if (presetPaths.length === 0) failures.push(`no agent presets matched ${AGENT_PRESET_GLOB}`)
+    if (targets.length === 0) failures.push('python/sdk-runtime/platforms.json defines no runtime targets')
+    failures.push(...await missingPresetPlugins(root, runtimeDependencies, presetPaths, targets))
+  }
   for (let index = 0; index < queue.length; index += 1) {
     const packageName = queue[index]
     if (packageName === undefined) continue
@@ -80,22 +101,117 @@ export async function verifyRuntimeClosure(root: string, manifestPath: string): 
     }
   }
 
-  if (failures.length > 0) {
-    const prefix = `verify-runtime-closure: required workspace peers are missing from ${runtimeName} dependencies:`
-    throw new Error([prefix, ...failures.map(failure => `  ${failure}`)].join('\n'))
+  return {
+    failures,
+    presetCount: presetPaths.length,
+    workspacePackageCount: queue.length,
+    runtimeName,
+    manifestPath,
   }
-
-  return { runtimeName, manifestPath, packageCount: queue.length }
 }
 
-/**
- * Render the success summary, naming the manifest that closes over how many
- * workspace packages.
- * @param result - the established closure.
- * @returns The single-line success message.
- */
+/** Render the closed runtime dependency graph summary. */
 export function formatClosureSuccess(result: RuntimeClosureResult): string {
-  return `verify-runtime-closure: ${result.manifestPath} closure passed: ${String(result.packageCount)} workspace packages form a closed runtime dependency graph under ${result.runtimeName}.`
+  return `verify-runtime-closure: ${result.manifestPath} closure passed: ${String(result.workspacePackageCount)} workspace packages form a closed runtime dependency graph under ${result.runtimeName}.`
+}
+
+if (isEntry(import.meta.url)) {
+  const root = resolve(import.meta.dirname, '..')
+  const { values } = parseArgs({
+    args: process.argv.slice(2),
+    options: { manifest: { type: 'string' } },
+    allowPositionals: false,
+  })
+  const manifestPath = values.manifest ?? DEFAULT_RUNTIME_MANIFEST
+  const result = await verifyRuntimeClosure(root, manifestPath)
+  if (result.failures.length > 0) {
+    console.error(`verify-runtime-closure: preset plugins or required workspace peers are missing from ${result.runtimeName} dependencies:`)
+    for (const failure of result.failures) console.error(`  ${failure}`)
+    process.exitCode = 1
+  } else {
+    console.log(formatClosureSuccess(result))
+  }
+}
+
+async function missingPresetPlugins(
+  root: string,
+  runtimeDependencies: Readonly<Record<string, string>>,
+  presetPaths: readonly string[],
+  targets: readonly string[],
+): Promise<string[]> {
+  const missing = new Map<string, Set<string>>()
+  const failures: string[] = []
+  for (const presetPath of presetPaths) {
+    const document = loadCordisYaml(await readFile(resolve(root, presetPath), 'utf8'))
+    if (!Array.isArray(document)) {
+      failures.push(`${presetPath}: preset root must be a Loader entry array`)
+      continue
+    }
+    for (const target of targets) {
+      const processPlatform = processPlatformForTarget(target)
+      for (const plugin of activeBarePluginPackages(document, processPlatform)) {
+        const version = runtimeDependencies[plugin]
+        if (version?.startsWith('workspace:') === true) continue
+        const preset = basename(dirname(presetPath))
+        const declaration = version === undefined
+          ? ''
+          : ` [runtime dependency is ${JSON.stringify(version)}; expected workspace:]`
+        const key = `${preset} preset -> ${plugin}${declaration}`
+        const targets = missing.get(key) ?? new Set<string>()
+        targets.add(target)
+        missing.set(key, targets)
+      }
+    }
+  }
+  failures.push(...[...missing.entries()].map(([chain, targets]) =>
+    `${chain} (${[...targets].sort().join(', ')})`))
+  return failures
+}
+
+function activeBarePluginPackages(entries: unknown[], processPlatform: string): Set<string> {
+  const packages = new Set<string>()
+  const visit = (value: unknown, parentDisabled: boolean): void => {
+    if (!isRecord(value)) return
+    const disabled = parentDisabled || disabledOnPlatform(value.disabled, processPlatform)
+    if (disabled) return
+    if (typeof value.name === 'string') {
+      const packageName = barePackageName(value.name)
+      if (packageName !== undefined) packages.add(packageName)
+    }
+    if (isCordisGroupEntry(value)) {
+      for (const child of value.config) visit(child, disabled)
+    }
+  }
+  for (const entry of entries) visit(entry, false)
+  return packages
+}
+
+function disabledOnPlatform(value: unknown, processPlatform: string): boolean {
+  if (typeof value === 'boolean') return value
+  if (!isRecord(value) || typeof value.__jsExpr !== 'string') return false
+  const match = /^process\.platform\s*(===|!==)\s*(['"])(win32|linux|darwin)\2$/.exec(value.__jsExpr.trim())
+  if (match === null) return false
+  const [, operator, , expected] = match
+  return operator === '===' ? processPlatform === expected : processPlatform !== expected
+}
+
+function processPlatformForTarget(target: string): string {
+  if (target.startsWith('linux-')) return 'linux'
+  if (target.startsWith('macos-')) return 'darwin'
+  throw new Error(`verify-runtime-closure: unsupported runtime target ${JSON.stringify(target)}`)
+}
+
+function barePackageName(specifier: string): string | undefined {
+  if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.includes(':')) return undefined
+  const parts = specifier.split('/')
+  if (specifier.startsWith('@')) {
+    return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : undefined
+  }
+  return parts[0] || undefined
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function loadWorkspacePackages(root: string): Promise<Map<string, WorkspacePackage>> {
@@ -104,14 +220,18 @@ async function loadWorkspacePackages(root: string): Promise<Map<string, Workspac
     .map(relative => resolve(root, relative))
   const result = new Map<string, WorkspacePackage>()
   for (const path of paths) {
-    const manifest = (await readJson(path)) as PackageManifest
+    const manifest = await loadManifest(path)
     if (manifest.name !== undefined) result.set(manifest.name, { path, manifest })
   }
   return result
 }
 
-async function readJson(path: string): Promise<unknown> {
-  return JSON.parse(await readFile(path, 'utf8')) as unknown
+async function loadManifest(path: string): Promise<PackageManifest> {
+  return loadJson<PackageManifest>(path)
+}
+
+async function loadJson<T>(path: string): Promise<T> {
+  return JSON.parse(await readFile(path, 'utf8')) as T
 }
 
 function formatChain(
@@ -126,21 +246,4 @@ function formatChain(
     parent = parents.get(parent)
   }
   return [runtimeName, ...chain].join(' -> ')
-}
-
-if (isEntry(import.meta.url)) {
-  const { values } = parseArgs({
-    args: process.argv.slice(2),
-    options: { manifest: { type: 'string' } },
-    allowPositionals: false,
-  })
-  const root = resolve(import.meta.dirname, '..')
-  const manifestPath = values.manifest ?? 'python/sdk-runtime/package.json'
-  try {
-    const result = await verifyRuntimeClosure(root, manifestPath)
-    console.log(formatClosureSuccess(result))
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error))
-    process.exit(1)
-  }
 }

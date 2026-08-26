@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-14-windows-desktop-host.md
 2026-08-14-windows-desktop-host.md: 5ef306b27932500644e826dfd2651f2211fec458
-2026-08-14-windows-desktop-host.zh.md: 23d84fa7678af03d7476c73c08cb728e11572b2b
+2026-08-14-windows-desktop-host.zh.md: 09c39f427114ebcd1420c8fe7b1344dd2ea8d1d0

@@ -22,7 +22,7 @@ DeepSeek Harness 把图片能力声明为模型级属性（`inputModalities`）�
 
 `vision` 工具仍是 `~/.dsh/.agent-presets/vision/` 下的用户级 agent preset，用托管凭据文档中的 `MINIMAX_API_KEY` 调用 MiniMax-M3；它未被产品化为仓库包（v1 范围）。桌面端与普通 CLI 启动共享默认 Harness home，因此 preset、凭据与设置直接继承，不需要第二层数据或同步。
 
-该标志开启时部分超集两个已实现决策。严格的 `read_image` 路由门禁（见 [最小 read_image 工具笔记](../../implemented/feature/2026-08-10-minimal-read-image-tool.md)）改为附件服务门禁；「Web 多模态图片输入与持久附件」笔记（见 [Web 多模态图片输入与持久附件](../../implemented/feature/2026-07-22-web-multimodal-image-input-and-durable-attachments.md)）中的「不得展平或跳过图片」不变式获得一个标志开启时的例外，把图片块转换为文本占位符。两份笔记在标志关闭时行为不变，因此继续有效且权威；标志关闭路径保留严格拒绝，保证文本路由的持久历史永远不会获得图片块。
+该标志开启时部分超集两个已实现决策。严格的 `read_image` 路由门禁（见 [最小 read_image 工具笔记](../../implemented/feature/2026-08-10-minimal-read-image-tool.zh.md)）改为附件服务门禁；「Web 多模态图片输入与持久附件」笔记（见 [Web 多模态图片输入与持久附件](../../implemented/feature/2026-07-22-web-multimodal-image-input-and-durable-attachments.zh.md)）中的「不得展平或跳过图片」不变式获得一个标志开启时的例外，把图片块转换为文本占位符。两份笔记在标志关闭时行为不变，因此继续有效且权威；标志关闭路径保留严格拒绝，保证文本路由的持久历史永远不会获得图片块。
 
 已知限制（推迟）：用户验证机器针对无扩展名附件对象路径的魔数嗅探能力未移植；保留基于扩展名的 `imageMediaTypeForPath` 解析。
 
