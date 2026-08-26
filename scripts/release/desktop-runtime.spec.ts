@@ -32,7 +32,10 @@ async function makeFixture(): Promise<{ root: string; stage: string; dir: string
     JSON.stringify({ name: '@deepseek-ai/dsh', version: VERSION }, null, 2) + '\n',
   )
   await write(join(stage, 'node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html'), '<html></html>\n')
-  await write(join(stage, 'node_modules/node-pty/prebuilds/win32-x64/pty.node'), '<bin>\ufeff')
+  await write(join(stage, 'node_modules/node-pty/prebuilds/win32-x64/conpty.node'), '<bin>\ufeff')
+  await write(join(stage, 'node_modules/node-pty/prebuilds/win32-x64/conpty_console_list.node'), '<bin>\ufeff')
+  await write(join(stage, 'node_modules/node-pty/prebuilds/win32-x64/conpty/conpty.dll'), '<bin>\ufeff')
+  await write(join(stage, 'node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe'), '<bin>\ufeff')
   return { root, stage, dir }
 }
 

@@ -27,7 +27,10 @@ const DEFAULT_STAGE = 'dist/desktop/runtime'
 const REQUIRED_ARTIFACTS = [
   `node_modules/${CLI_PACKAGE}/lib/bin.js`,
   'node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html',
-  'node_modules/node-pty/prebuilds/win32-x64/pty.node',
+  'node_modules/node-pty/prebuilds/win32-x64/conpty.node',
+  'node_modules/node-pty/prebuilds/win32-x64/conpty_console_list.node',
+  'node_modules/node-pty/prebuilds/win32-x64/conpty/conpty.dll',
+  'node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe',
 ] as const
 
 /** Binary-heavy extensions skipped by the patch-marker scan. */
