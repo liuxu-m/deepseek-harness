@@ -96,6 +96,7 @@ describe('globalImage flag service', () => {
     expect(rowConfig['globalImage']).toBe(true)
     const ctx = new Context()
     await mountWebApp(ctx, new webApp.Config({
+      openBrowser: false,
       printUrl: false,
       surfaceContext: false,
       trustedHosts: [] as string[],
