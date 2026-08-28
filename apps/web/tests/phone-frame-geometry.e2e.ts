@@ -60,8 +60,9 @@ interface FrameMetrics {
 function measureFrame(page: Page, width: number): Promise<FrameMetrics> {
   return page.evaluate((viewportWidth) => {
     const center = document.querySelector<HTMLElement>('[data-frame-column="center"]')
-    const frame = center?.parentElement
-    if (center === null || frame === null) throw new Error('frame center column not in the DOM')
+    if (center === null) throw new Error('frame center column not in the DOM')
+    const frame = center.parentElement
+    if (frame === null) throw new Error('frame parent not in the DOM')
     const centerBox = center.getBoundingClientRect()
     const frameBox = frame.getBoundingClientRect()
     const scroller = document.querySelector<HTMLElement>('[data-conversation-scroll]')
