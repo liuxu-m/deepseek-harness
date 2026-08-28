@@ -85,13 +85,15 @@ function provideAttachments(ctx: Context): void {
       mediaTypes: ['image/png'],
     },
     validateImage: (_input: { data: Uint8Array }) => Promise.resolve(),
-    saveImage: (input: { data: Uint8Array; mediaType: 'image/png'; name?: string }) => Promise.resolve({
-      attachmentId: `att-${String(input.data[0])}`,
-      mediaType: input.mediaType,
-      bytes: input.data.byteLength,
-      width: 1,
-      height: 1,
-    }),
+    saveImages: (inputs: readonly { data: Uint8Array; mediaType: 'image/png'; name?: string }[]) => Promise.resolve(
+      inputs.map(input => ({
+        attachmentId: `att-${String(input.data[0])}`,
+        mediaType: input.mediaType,
+        bytes: input.data.byteLength,
+        width: 1,
+        height: 1,
+      })),
+    ),
   } as never)
 }
 
