@@ -342,7 +342,7 @@ function Invoke-Check5 {
     Write-Fail "GET / failed: $($_.Exception.Message)"
     return
   }
-  Assert-True ($index.Contains('window.__DSH_BOOT__')) 'GET / contains window.__DSH_BOOT__'
+  Assert-True ($index.Contains('globalThis["__DSH_BOOT__"]')) 'GET / contains the __DSH_BOOT__ boot graph'
 }
 
 # ---------------------------------------------------------------------------
