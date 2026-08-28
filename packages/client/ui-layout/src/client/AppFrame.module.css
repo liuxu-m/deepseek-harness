@@ -74,6 +74,14 @@
       visibility var(--ds-transition-duration-slow) var(--ds-ease-in-out);
   }
 
+  /* Absolute sidebar leaves the grid flow, so source-order auto-placement
+     would drop the center column into the 0-width first track. Pin it to the
+     full-width middle track the frame always sizes on phones. */
+  .frame[data-phone] .centerCol {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
   .frame[data-phone][data-sidebar-collapsed] .sidebarCol {
     visibility: hidden;
     transform: translateX(-100%);

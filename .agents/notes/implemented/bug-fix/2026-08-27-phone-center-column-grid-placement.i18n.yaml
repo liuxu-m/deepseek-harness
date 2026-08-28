@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-27-phone-center-column-grid-placement.md
+2026-08-27-phone-center-column-grid-placement.md: 5f371088c765da810f5291b91fa9bd7e084c5b2d
+2026-08-27-phone-center-column-grid-placement.zh.md: 53351eeb95b929c45d1f46b2676c8d35cb318411

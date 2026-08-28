@@ -26,12 +26,12 @@ export type AppFrameProps =
 
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode }) {
-  return <div className={css.centerCol}>{props.children}</div>
+  return <div className={css.centerCol} data-frame-column="center">{props.children}</div>
 }
 
 /** Details column grid item; width 0 keeps the subtree mounted (never unmount on close). */
 function DetailsColumn(props: { children?: ReactNode }) {
-  return <div className={css.detailsCol}>{props.children}</div>
+  return <div className={css.detailsCol} data-frame-column="details">{props.children}</div>
 }
 
 /**
@@ -186,7 +186,7 @@ export function AppFrame({
       data-dragging={dragging || undefined}
       data-phone={phone || undefined}
     >
-      <div className={css.sidebarCol}>
+      <div className={css.sidebarCol} data-frame-column="sidebar">
         {renderSlot('sidebar', {
           collapsed: phone ? false : sidebarCollapsed,
           width: sidebarWidth,
