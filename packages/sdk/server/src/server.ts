@@ -84,12 +84,13 @@ export class HarnessSdkJsonRpcServer {
           if (typeof source !== 'object' || source === null || !('kind' in source)
             || (source as { kind?: unknown }).kind !== 'subagent-report') continue
           const content = (message as { content?: unknown }).content
-          const report = Array.isArray(content)
+          let report = Array.isArray(content)
             ? content.filter((block): block is { type: 'text'; text: string } => (
               typeof block === 'object' && block !== null && (block as { type?: unknown }).type === 'text'
               && typeof (block as { text?: unknown }).text === 'string'))
               .map(block => block.text).join('')
             : ''
+          report = report.replace(/^Background subagent [^\n]+ reported:\n/, '')
           this.transport.notify('subagent.report', {
             sessionId: String(session.id), eventSeq: event.seq, occurredAt: event.time,
             agentId: String('senderSessionId' in source
@@ -97,15 +98,6 @@ export class HarnessSdkJsonRpcServer {
             parentSessionId: String(session.id), report,
           })
         }
-      } else if (event.type === 'subagent/message-accepted' || event.type === 'subagent/steer-accepted'
-        || event.type === 'subagent/interrupt-requested' || event.type === 'subagent/closed') {
-        const action = event.type === 'subagent/message-accepted' ? 'queue'
-          : event.type === 'subagent/steer-accepted' ? 'steer'
-            : event.type === 'subagent/interrupt-requested' ? 'interrupt' : 'close'
-        this.transport.notify('subagent.control', {
-          sessionId: String(session.id), ...event.data, action, accepted: true,
-          eventSeq: event.seq, occurredAt: event.time,
-        })
       }
     }))
     this.disposers.push(ctx.on('agent/status', ({ agent, status }) => {

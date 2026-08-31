@@ -309,10 +309,11 @@ export class HarnessClient {
     if (!isRecord(result) || typeof result.agentId !== 'string' || typeof result.state !== 'string') {
       throw new SdkProtocolError(`subagent/status returned malformed result: ${JSON.stringify(result)}`)
     }
+    const previous = this.subagentStatusCache.get(params.agentId)
     this.subagentStatusCache.set(params.agentId, {
-      // A status query is a point-in-time baseline. Keep it below streamed
-      // event sequence numbers so later notifications can advance the cache.
-      eventSeq: -1,
+      // Preserve the stream watermark so a refresh cannot make an older
+      // notification overwrite newer state.
+      eventSeq: previous?.eventSeq ?? -1,
       occurredAt: typeof result.lastActivityAt === 'number' ? result.lastActivityAt : 0,
       status: result,
     })

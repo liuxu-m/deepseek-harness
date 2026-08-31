@@ -861,7 +861,7 @@ function CatalogDropdown({
  */
 export function SubagentHeaderLineage({
   lineageSessionId, displayTitle, openTitle,
-  useSessions, openChild, refresh, setCatalogOpen, controlSubagent, t,
+  useSessions, openChild, refresh, setCatalogOpen, controlSubagent, getSubagentStatus, t,
 }: SubagentHeaderLineageProps) {
   const parentId = useSessions((state) => {
     const summary = state.byId[lineageSessionId]
@@ -870,6 +870,7 @@ export function SubagentHeaderLineage({
   const shared = {
     useSessions, openChild, refresh, setCatalogOpen, t,
     ...(controlSubagent === undefined ? {} : { controlSubagent }),
+    ...(getSubagentStatus === undefined ? {} : { getSubagentStatus }),
   }
   if (parentId === undefined) {
     return (
