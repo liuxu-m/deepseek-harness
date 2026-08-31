@@ -98,18 +98,17 @@ export class HarnessSdkJsonRpcServer {
             parentSessionId: String(session.id), report,
           })
         }
+      } else if (event.type === 'subagent/closed') {
+        this.transport.notify('subagent.control', {
+          sessionId: String(event.data.parentSessionId), eventSeq: event.data.eventSeq,
+          occurredAt: event.data.occurredAt, agentId: String(event.data.agentId),
+          parentSessionId: String(event.data.parentSessionId), requestId: String(event.data.requestId),
+          action: 'close', accepted: true, closedAgentIds: event.data.closedAgentIds.map(String),
+        })
       }
     }))
     this.disposers.push(ctx.on('agent/status', ({ agent, status }) => {
       this.transport.notify('session.status', { sessionId: String(agent.session.id), status })
-    }))
-    this.disposers.push(ctx.on('subagent/closed', (data) => {
-      this.transport.notify('subagent.control', {
-        sessionId: String(data.parentSessionId), eventSeq: data.eventSeq,
-        occurredAt: data.occurredAt, agentId: String(data.agentId),
-        parentSessionId: String(data.parentSessionId), requestId: String(data.requestId),
-        action: 'close', accepted: true, closedAgentIds: data.closedAgentIds.map(String),
-      })
     }))
     this.disposers.push(ctx.on('session/created', (session) => {
       const parentSession = session.header.parentSession

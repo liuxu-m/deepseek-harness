@@ -668,7 +668,7 @@ export class SubagentContinuationManager {
           ignorable: true as const,
         }
         await this.requirePersistence().append(childId, [closedEvent])
-        this.ctx.emit('subagent/closed', closedEvent.data)
+        this.ctx.emit('session/event', session, closedEvent)
         completion.resolve({ requestId, agentId: childId, accepted: true, noOp: false, previousState, closedAgentIds })
       } catch (error: unknown) {
         completion.reject(error)
