@@ -103,6 +103,14 @@ export class HarnessSdkJsonRpcServer {
     this.disposers.push(ctx.on('agent/status', ({ agent, status }) => {
       this.transport.notify('session.status', { sessionId: String(agent.session.id), status })
     }))
+    this.disposers.push(ctx.on('subagent/closed', (data) => {
+      this.transport.notify('subagent.control', {
+        sessionId: String(data.parentSessionId), eventSeq: data.eventSeq,
+        occurredAt: data.occurredAt, agentId: String(data.agentId),
+        parentSessionId: String(data.parentSessionId), requestId: String(data.requestId),
+        action: 'close', accepted: true, closedAgentIds: data.closedAgentIds.map(String),
+      })
+    }))
     this.disposers.push(ctx.on('session/created', (session) => {
       const parentSession = session.header.parentSession
       if (parentSession === undefined) return
@@ -194,7 +202,7 @@ export class HarnessSdkJsonRpcServer {
         result = await runtime.close(SessionId(params.agentId), authority, { cascade: params.cascade === true }); break
       }
     }
-    this.transport.notify('subagent.control', {
+    if (params.action !== 'close') this.transport.notify('subagent.control', {
       sessionId: params.parentSessionId, eventSeq: ++this.controlNotificationSeq,
       occurredAt: Date.now(), agentId: params.agentId, parentSessionId: params.parentSessionId,
       action: params.action, accepted: result.accepted, requestId: String(result.requestId),

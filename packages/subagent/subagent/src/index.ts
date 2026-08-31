@@ -181,6 +181,15 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'subagent/end'(this: Scoped<SubagentRuntime>, info: SubagentRunEndInfo): void
+    /** A durable close transaction completed. */
+    'subagent/closed'(data: {
+      readonly eventSeq: number
+      readonly occurredAt: number
+      readonly agentId: SessionId
+      readonly parentSessionId: SessionId
+      readonly requestId: SubagentControlRequestId
+      readonly closedAgentIds: readonly SessionId[]
+    }): void
   }
 }
 

@@ -34,6 +34,7 @@ interface SubagentControlEvent {
   readonly parentSessionId: import('@deepseek-ai/dsh-session').SessionId
   readonly requestId: SubagentControlRequestId
   readonly messageId: MessageId
+  readonly mode?: 'queue' | 'followup' | 'steer'
   readonly state: string
   readonly ignorable: true
 }

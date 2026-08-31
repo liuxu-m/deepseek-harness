@@ -562,7 +562,7 @@ export class SubagentContinuationManager {
         const message = createUserMessage({ content, source: options.source })
         activation.handle.agent.inbox.append('next-turn', message)
         activation.announced = true
-        this.appendControlEvent(activation, 'subagent/message-accepted', requestId, message.id)
+        this.appendControlEvent(activation, 'subagent/message-accepted', requestId, message.id, 'queue')
         return message.id
       }
       return this.coldResume(parent, childId, content, { ...options, source: options.source }, false, requestId)
@@ -590,7 +590,7 @@ export class SubagentContinuationManager {
       const message = createUserMessage({ content, source: options.source })
       activation.handle.agent.steer(message)
       activation.announced = true
-      this.appendControlEvent(activation, 'subagent/steer-accepted', requestId, message.id)
+      this.appendControlEvent(activation, 'subagent/steer-accepted', requestId, message.id, 'steer')
       return message.id
     })
     return { requestId, agentId: childId, accepted: messageId !== undefined, effectiveStep: 'next-step', ...(messageId === undefined ? {} : { messageId }) }
@@ -668,6 +668,7 @@ export class SubagentContinuationManager {
           ignorable: true as const,
         }
         await this.requirePersistence().append(childId, [closedEvent])
+        this.ctx.emit('subagent/closed', closedEvent.data)
         completion.resolve({ requestId, agentId: childId, accepted: true, noOp: false, previousState, closedAgentIds })
       } catch (error: unknown) {
         completion.reject(error)
@@ -768,6 +769,7 @@ export class SubagentContinuationManager {
     type: 'subagent/message-accepted' | 'subagent/steer-accepted',
     requestId: SubagentControlRequestId,
     messageId: MessageId,
+    mode: 'queue' | 'followup' | 'steer',
   ): void {
     activation.handle.agent.session.append(type, {
       eventSeq: this.nextControlSequence(activation),
@@ -776,6 +778,7 @@ export class SubagentContinuationManager {
       parentSessionId: activation.parentSession,
       requestId,
       messageId,
+      mode,
       state: this.stateOf(activation),
       ignorable: true,
     })
@@ -1308,7 +1311,7 @@ export class SubagentContinuationManager {
     const message = createUserMessage({ content, source: options.source })
     activation.handle.agent.inbox.append('next-turn', message)
     activation.announced = true
-    if (requestId !== undefined) this.appendControlEvent(activation, 'subagent/message-accepted', requestId, message.id)
+    if (requestId !== undefined) this.appendControlEvent(activation, 'subagent/message-accepted', requestId, message.id, wake ? 'followup' : 'queue')
     return message.id
   }
 
@@ -1526,7 +1529,7 @@ export class SubagentContinuationManager {
     // Past this point the caller has an id for this child, so its eventual
     // settlement is something the parent is owed an account of.
     activation.announced = true
-    if (requestId !== undefined) this.appendControlEvent(activation, 'subagent/message-accepted', requestId, accepted)
+    if (requestId !== undefined) this.appendControlEvent(activation, 'subagent/message-accepted', requestId, accepted, 'followup')
     return accepted
   }
 
