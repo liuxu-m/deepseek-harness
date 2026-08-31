@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import * as TimeoutPolicy from '@deepseek-ai/dsh-tool-call-timeout-policy'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -100,6 +101,193 @@ async function waitNoActivation(ctx: Context, childId: SessionId): Promise<void>
 }
 
 describe('dsh-tool-subagent-control', () => {
+  it('registers wait_agent without a static timeout and with optional timeout_ms', async () => {
+    const { ctx } = await setup([])
+    const schemas = ctx.tools.schemas().filter(schema => schema.name === 'wait_agent')
+    expect(schemas).toHaveLength(1)
+    const props = (schemas[0]!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
+    expect(Object.keys(props)).toEqual(['timeout_ms'])
+    expect(ctx.tools.get('wait_agent')?.timeoutMs).toBeUndefined()
+  })
+
+  it('returns immediately without consuming an already pending inbox message', async () => {
+    const { ctx, parent } = await setup([])
+    parent.inbox.append('next-step', createUserMessage({
+      content: [{ type: 'text', text: 'already pending' }],
+      source: { kind: 'user' },
+    }))
+
+    const result = await callTool(ctx, 'wait_agent', {}, parent)
+
+    expect(result.isError).toBe(false)
+    expect(text(result)).toBe('Wait completed.')
+    expect(parent.inbox.nextStep).toHaveLength(1)
+  })
+
+  it('fails loud without a calling agent', async () => {
+    const { ctx } = await setup([])
+
+    const result = await callTool(ctx, 'wait_agent', {})
+
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('wait_agent requires a calling agent')
+  })
+
+  it('returns an abort result when its execution signal is already cancelled', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('already cancelled'))
+    const { ctx, parent } = await setup([])
+
+    const result = await callTool(ctx, 'wait_agent', {}, parent, controller.signal)
+
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('tool call aborted before dispatch')
+  })
+
+  it('rejects a negative timeout instead of treating it as an immediate timer', async () => {
+    const { ctx, parent } = await setup([])
+
+    const result = await callTool(ctx, 'wait_agent', { timeout_ms: -1 }, parent)
+
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('timeout_ms must be an integer from 0 through 3600000')
+  })
+
+  it('rejects a non-integer timeout through the tool schema', async () => {
+    const { ctx, parent } = await setup([])
+
+    const result = await callTool(ctx, 'wait_agent', { timeout_ms: 1.5 }, parent)
+
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('"timeout_ms" must be an integer')
+  })
+
+  it.each([3_600_001, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects invalid timeout_ms value %s',
+    async (timeout_ms) => {
+      const { ctx, parent } = await setup([])
+
+      const result = await callTool(ctx, 'wait_agent', { timeout_ms }, parent)
+
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('timeout_ms must be an integer from 0 through 3600000')
+    },
+  )
+
+  it('returns its normal timeout result when no inbox message arrives', async () => {
+    const { ctx, parent } = await setup([])
+
+    const result = await callTool(ctx, 'wait_agent', { timeout_ms: 0 }, parent)
+
+    expect(result.isError).toBe(false)
+    expect(text(result)).toBe('Wait timed out.')
+    expect(parent.inbox.hasPending).toBe(false)
+  })
+
+  it('does not wake for another agent inbox activity', async () => {
+    const { ctx, parent } = await setup([])
+    const stranger = ctx.agentLoop.create(SessionId('stranger'), { provider: 'mock', model: 'mock' })
+    const pending = callTool(ctx, 'wait_agent', { timeout_ms: 1_000 }, parent)
+
+    stranger.inbox.append('next-step', createUserMessage({
+      content: [{ type: 'text', text: 'not for parent' }],
+      source: { kind: 'user' },
+    }))
+    await Promise.resolve()
+    expect(parent.inbox.hasPending).toBe(false)
+
+    parent.inbox.append('next-step', createUserMessage({
+      content: [{ type: 'text', text: 'for parent' }],
+      source: { kind: 'user' },
+    }))
+    expect(text(await pending)).toBe('Wait completed.')
+  })
+
+  it('returns an error on execution cancellation and ignores a later inbox insertion', async () => {
+    const controller = new AbortController()
+    const { ctx, parent } = await setup([])
+    const on = vi.spyOn(parent.ctx, 'on')
+    const pending = callTool(ctx, 'wait_agent', { timeout_ms: 1_000 }, parent, controller.signal)
+
+    await vi.waitFor(() => {
+      expect(on.mock.calls.some(([event]) => event === 'agent/inbox/inserted')).toBe(true)
+    })
+    controller.abort(new Error('cancelled by test'))
+    const result = await pending
+    parent.inbox.append('next-step', createUserMessage({
+      content: [{ type: 'text', text: 'after cancellation' }],
+      source: { kind: 'user' },
+    }))
+
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('cancelled by test')
+    expect(parent.inbox.nextStep).toHaveLength(1)
+    on.mockRestore()
+  })
+
+  it('keeps its parameterized timeout when timeout policy is installed', async () => {
+    const { ctx, parent } = await setup([])
+    await ctx.plugin(TimeoutPolicy)
+
+    const result = await callTool(ctx, 'wait_agent', { timeout_ms: 0 }, parent)
+
+    expect(result.isError).toBe(false)
+    expect(text(result)).toBe('Wait timed out.')
+  })
+
+  it('waits for the calling agent inbox without consuming its inserted message', async () => {
+    const { ctx, parent } = await setup([])
+    const pending = callTool(ctx, 'wait_agent', { timeout_ms: 1_000 }, parent)
+    await vi.waitFor(() => { expect(parent.inbox.hasPending).toBe(false) })
+    const message = createUserMessage({
+      content: [{ type: 'text', text: 'child settled' }],
+      source: { kind: 'user' },
+    })
+
+    parent.inbox.append('next-step', message)
+
+    const result = await pending
+    expect(result.isError).toBe(false)
+    expect(text(result)).toBe('Wait completed.')
+    expect(parent.inbox.nextStep).toEqual([message])
+  })
+
+  it('rechecks inbox after subscription when a message arrives during listener setup', async () => {
+    const { ctx, parent } = await setup([])
+    const originalOn = parent.ctx.on.bind(parent.ctx)
+    const on = vi.spyOn(parent.ctx, 'on').mockImplementationOnce((event, listener) => {
+      const dispose = originalOn(event as never, listener as never)
+      parent.inbox.append('next-step', createUserMessage({
+        content: [{ type: 'text', text: 'during subscription' }],
+        source: { kind: 'user' },
+      }))
+      return dispose
+    })
+
+    const result = await callTool(ctx, 'wait_agent', { timeout_ms: 1_000 }, parent)
+
+    expect(text(result)).toBe('Wait completed.')
+    expect(parent.inbox.nextStep).toHaveLength(1)
+    on.mockRestore()
+  })
+
+  it('settles cancellation when its signal aborts during listener setup', async () => {
+    const controller = new AbortController()
+    const { ctx, parent } = await setup([])
+    const originalOn = parent.ctx.on.bind(parent.ctx)
+    const on = vi.spyOn(parent.ctx, 'on').mockImplementationOnce((event, listener) => {
+      const dispose = originalOn(event as never, listener as never)
+      controller.abort(new Error('cancelled during subscription'))
+      return dispose
+    })
+
+    const result = await callTool(ctx, 'wait_agent', { timeout_ms: 1_000 }, parent, controller.signal)
+
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('cancelled during subscription')
+    on.mockRestore()
+  })
+
   it('registers send_message once, globally, with the two required parameters', async () => {
     const { ctx } = await setup([])
     const schemas = ctx.tools.schemas().filter(schema => schema.name === 'send_message')
@@ -211,9 +399,11 @@ describe('dsh-tool-subagent-control', () => {
     const fiber = await ctx.plugin(tool)
     expect(ctx.tools.schemas().some(schema => schema.name === 'send_message')).toBe(true)
     expect(ctx.tools.schemas().some(schema => schema.name === 'interrupt_agent')).toBe(true)
+    expect(ctx.tools.schemas().some(schema => schema.name === 'wait_agent')).toBe(true)
     await fiber.dispose()
     expect(ctx.tools.schemas().some(schema => schema.name === 'send_message')).toBe(false)
     expect(ctx.tools.schemas().some(schema => schema.name === 'interrupt_agent')).toBe(false)
+    expect(ctx.tools.schemas().some(schema => schema.name === 'wait_agent')).toBe(false)
   })
 
   it('has the namespace-plugin export shape (no stray default)', () => {
