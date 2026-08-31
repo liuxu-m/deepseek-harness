@@ -10,7 +10,7 @@ Continuable child agents can outlive the parent step that started them. Without 
 
 ## Decision
 
-The shipped `code` preset installs the parent control tools and the child-scoped `report` channel, plus a bundled `multi-agent-delivery` skill. The persona and skill direct the parent to dispatch independent work in parallel, request milestone reports, use status snapshots instead of busy polling, wait only for expected inbox messages, and end the current step immediately after `Wait completed.`.
+The shipped `code` preset installs the parent control tools and the bundled `multi-agent-delivery` skill; its host composition provides the child-scoped `report` channel exactly once. The persona and skill direct the parent to dispatch independent work in parallel, request milestone reports, use status snapshots instead of busy polling, wait only for expected inbox messages, and end the current step immediately after `Wait completed.`.
 
 Parent controls have distinct scheduling semantics: `send_message` queues without waking, `followup_task` queues and wakes, and `steer_agent` delivers corrective context at the next safe step. `interrupt_agent` stops only the current turn and preserves queued work and descendants. `close_agent` closes a child subtree under direct-parent or ancestor authority. Durable control, progress, report, and settlement observations remain available to SDK and UI projections without exposing private child prompts or complete transcripts.
 
@@ -26,4 +26,4 @@ The bundled skill root resolves from the preset's `baseUrl`, so the same composi
 
 ## Consequences
 
-The shipped code preset gives the model explicit parent-child coordination guidance and all six control operations. English and Chinese package/subsystem references, generated catalogs, and source assertions describe the same controls and notification limits. Deployments still select one control package per registry scope because the experimental Agent Teams package defines overlapping global tool names. A stale local preset can omit the bundled skill or report row, so release verification exercises the shipped path instead of treating the local override as an artifact.
+The shipped code preset gives the model explicit parent-child coordination guidance and all six control operations; its host composition loads the child-scoped report channel exactly once. English and Chinese package/subsystem references, generated catalogs, and source assertions describe the same controls and notification limits. Deployments still select one control package per registry scope because the experimental Agent Teams package defines overlapping global tool names. A stale local preset can omit the bundled skill or inherit an incompatible report registration, so release verification exercises the shipped path instead of treating the local override as an artifact.

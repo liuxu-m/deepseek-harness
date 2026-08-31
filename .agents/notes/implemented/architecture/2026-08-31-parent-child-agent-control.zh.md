@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-随附的 `code` preset 安装 parent 控制工具、child 作用域的 `report` 通道和内置 `multi-agent-delivery` skill。Persona 与 skill 要求 parent 并行派发独立工作、请求里程碑报告、使用状态快照而不是忙轮询、只在预期 inbox 消息时等待，并在 `Wait completed.` 之后立即结束当前 step。
+随附的 `code` preset 安装 parent 控制工具和内置 `multi-agent-delivery` skill；其宿主 composition 只加载一次 child 作用域的 `report` 通道。Persona 与 skill 要求 parent 并行派发独立工作、请求里程碑报告、使用状态快照而不是忙轮询、只在预期 inbox 消息时等待，并在 `Wait completed.` 之后立即结束当前 step。
 
 Parent 控制具有不同的调度语义：`send_message` 只排队不唤醒，`followup_task` 排队并唤醒，`steer_agent` 在下一安全 step 投递纠偏上下文。`interrupt_agent` 只停止当前轮次并保留排队工作与后代。`close_agent` 在直接父级或祖先权限下关闭 child 子树。持久化控制、进度、报告和结算观测仍可投影给 SDK 与 UI，但不暴露 child 私有提示词或完整 transcript。
 
@@ -26,4 +26,4 @@ Parent 控制具有不同的调度语义：`send_message` 只排队不唤醒，`
 
 ## Consequences
 
-随附 code preset 为模型提供明确的 parent-child 协调指引和六项控制操作。英文及中文 package/subsystem 参考、生成目录与来源断言描述相同的控制和通知限制。由于实验性的 Agent Teams 包定义了重叠的全局工具名，每个 registry scope 仍必须选择一个控制包。过期的本地 preset 可能缺少内置 skill 或 report 行，因此发布验证会运行随附路径，而不是把本地覆盖视为发布产物。
+随附 code preset 为模型提供明确的 parent-child 协调指引和六项控制操作；其宿主 composition 只加载一次 report。英文及中文 package/subsystem 参考、生成目录与来源断言描述相同的控制和通知限制。由于实验性的 Agent Teams 包定义了重叠的全局工具名，每个 registry scope 仍必须选择一个控制包。过期的本地 preset 可能缺少内置 skill 或继承不兼容的 report 注册，因此发布验证会运行随附路径，而不是把本地覆盖视为发布产物。
