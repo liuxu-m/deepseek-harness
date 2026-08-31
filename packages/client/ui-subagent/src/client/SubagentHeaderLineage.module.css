@@ -345,3 +345,9 @@
 .controls button:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
+
+.statusDetails {
+  display: block;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}

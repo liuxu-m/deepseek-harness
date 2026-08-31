@@ -45,6 +45,7 @@ interface CatalogRowsProps {
   openChild: (address: SubagentAddress) => void
   refresh: (parentSessionId: SessionId) => void
   controlSubagent?: (parentSessionId: SessionId, agentId: SessionId, action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close') => Promise<unknown>
+  getSubagentStatus?: (parentSessionId: SessionId, agentId: SessionId) => Promise<unknown>
   toggleBranch: (childSessionId: SessionId) => void
   closeCatalog: () => void
 }
@@ -240,7 +241,7 @@ function CatalogLoadingRows({
 /** Render one catalog level and recurse only through explicitly expanded rows. */
 function CatalogRows({
   parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level, now,
-  openChild, refresh, toggleBranch, closeCatalog, controlSubagent, t,
+  openChild, refresh, toggleBranch, closeCatalog, controlSubagent, getSubagentStatus, t,
 }: CatalogRowsProps & { t: TranslateNS<typeof NS> }) {
   const emptyLoading = catalog.state === 'loading' && catalog.entries.length === 0
   const reserveDisclosure = catalog.entries.some(
@@ -346,6 +347,23 @@ function CatalogRows({
             </span>
           )
         }
+        const StatusDetails = (): ReactElement | null => {
+          const [status, setStatus] = useState<Record<string, unknown>>()
+          useEffect(() => {
+            if (getSubagentStatus === undefined) return
+            void getSubagentStatus(parentSessionId, entry.id).then((result: unknown) => {
+              if (typeof result === 'object' && result !== null && 'ok' in result) {
+                const value = (result as { ok: boolean; value?: unknown }).value
+                if (typeof value === 'object' && value !== null) setStatus(value as Record<string, unknown>)
+              }
+            })
+          }, [])
+          if (status === undefined) return null
+          const fields = [status.state, status.phase, status.lastReport,
+            typeof status.pendingMessageCount === 'number' ? `pending:${status.pendingMessageCount}` : undefined]
+            .filter((value): value is string | number => typeof value === 'string' || typeof value === 'number')
+          return fields.length === 0 ? null : <span className={css.statusDetails}>{fields.join(' · ')}</span>
+        }
 
         const open = (): void => {
           openChild({ parentSessionId, childSessionId: entry.id, mode: entry.mode })
@@ -402,6 +420,7 @@ function CatalogRows({
                 <span className={css.content}>
                   <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{label}</span>
                   <span className={css.summary}>{secondary}</span>
+                  <StatusDetails />
                 </span>
                 <ControlMenu />
                 {metrics !== '' && (
@@ -449,6 +468,7 @@ function CatalogRows({
                       toggleBranch={toggleBranch}
                       closeCatalog={closeCatalog}
                       {...controlSubagent === undefined ? {} : { controlSubagent }}
+                      {...getSubagentStatus === undefined ? {} : { getSubagentStatus }}
                       t={t}
                     />
                   )}
@@ -508,7 +528,7 @@ function catalogMenuPosition(trigger: HTMLButtonElement): CSSProperties {
 /** One trigger-plus-tree dropdown over the catalog rooted at `rootSessionId`. */
 function CatalogDropdown({
   rootSessionId, currentSessionId, displayTitle, openTitle, variant, separator = false,
-  useSessions, openChild, refresh, setCatalogOpen, controlSubagent, t,
+  useSessions, openChild, refresh, setCatalogOpen, controlSubagent, getSubagentStatus, t,
 }: CatalogDropdownProps) {
   const ancestorSwitcher = variant === 'switcher' && openTitle !== undefined
   const catalogs = useSessions(state => state.subagentsByParent)
@@ -825,6 +845,7 @@ function CatalogDropdown({
             toggleBranch={toggleBranch}
             closeCatalog={() => { changeOpen(false) }}
             {...controlSubagent === undefined ? {} : { controlSubagent }}
+            {...getSubagentStatus === undefined ? {} : { getSubagentStatus }}
             t={t}
           />
         </div>
