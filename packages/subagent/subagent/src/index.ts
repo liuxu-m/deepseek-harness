@@ -291,6 +291,9 @@ export class SubagentRuntime extends Service {
   async close(childId: SessionId, authority: SubagentCloseAuthority, options?: SubagentCloseOptions): Promise<SubagentCloseResult> {
     const manager = this.continuations
     if (manager === undefined) {
+      if (this.ctx.agents.get(authority.agent.id) !== authority.agent || authority.agent.id === childId) {
+        throw new SubagentError('close requires an exact live parent or ancestor', 'UNAUTHORIZED')
+      }
       const requestId = SubagentControlRequestId(randomUUID())
       return { requestId, agentId: childId, accepted: true, noOp: true, previousState: 'completed', closedAgentIds: [] }
     }
