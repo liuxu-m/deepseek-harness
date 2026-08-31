@@ -516,6 +516,7 @@ export class SubagentContinuationManager {
     options: SubagentFollowupOptions,
   ): Promise<MessageId> {
     this.assertAdmitting(parent)
+    if (this.closeResults.has(childId)) throw new SubagentError(`subagent "${childId}" is closed`, 'ACTIVATION_CLOSING')
     while (true) {
       const live = await this.locks.run(childId, async () => {
         const activation = this.activations.get(childId)
@@ -543,6 +544,7 @@ export class SubagentContinuationManager {
   /** Queue a message without waking the child's driver. */
   async queue(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentQueueOptions): Promise<SubagentControlResult> {
     this.assertAdmitting(parent)
+    if (this.closeResults.has(childId)) throw new SubagentError(`subagent "${childId}" is closed`, 'ACTIVATION_CLOSING')
     const requestId = SubagentControlRequestId(randomUUID())
     const messageId = await this.locks.run(childId, async () => {
       const activation = this.activations.get(childId)
@@ -564,6 +566,7 @@ export class SubagentContinuationManager {
   /** Queue steering content for the next safe step. */
   async steer(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentSteerOptions): Promise<SubagentControlResult> {
     this.assertAdmitting(parent)
+    if (this.closeResults.has(childId)) return { requestId: SubagentControlRequestId(randomUUID()), agentId: childId, accepted: false }
     const requestId = SubagentControlRequestId(randomUUID())
     const messageId = await this.locks.run(childId, async () => {
       const activation = this.activations.get(childId)
@@ -612,24 +615,30 @@ export class SubagentContinuationManager {
       }
     }
     collect(activation)
-    const result = (async () => {
-      activation.handle.agent.session.append('subagent/closed', {
-        eventSeq: ++this.controlSequence,
-        occurredAt: Date.now(),
-        agentId: childId,
-        parentSessionId: activation.parentSession,
-        requestId,
-        state: 'closed',
-        closedAgentIds,
-        ignorable: true,
-      })
-      const sessions = this.ctx.get('sessions')
-      if (sessions !== undefined) await sessions.flush(activation.handle.agent.session)
-      await this.dispose(activation)
-      return { requestId, agentId: childId, accepted: true, noOp: false, previousState, closedAgentIds }
+    const completion = Promise.withResolvers<SubagentCloseResult>()
+    this.closeResults.set(childId, completion.promise)
+    const disposal = this.dispose(activation)
+    void (async () => {
+      try {
+        activation.handle.agent.session.append('subagent/closed', {
+          eventSeq: ++this.controlSequence,
+          occurredAt: Date.now(),
+          agentId: childId,
+          parentSessionId: activation.parentSession,
+          requestId,
+          state: 'closed',
+          closedAgentIds,
+          ignorable: true,
+        })
+        const sessions = this.ctx.get('sessions')
+        if (sessions !== undefined) await sessions.flush(activation.handle.agent.session)
+        await disposal
+        completion.resolve({ requestId, agentId: childId, accepted: true, noOp: false, previousState, closedAgentIds })
+      } catch (error: unknown) {
+        completion.reject(error)
+      }
     })()
-    this.closeResults.set(childId, result)
-    return result
+    return completion.promise
   }
 
   private validateCloseAuthority(authority: SubagentCloseAuthority, childId: SessionId): void {
