@@ -445,7 +445,7 @@ export class SessionManager {
       })
     }
     return api.control({
-      parentSessionId, agentId, action,
+      parentSessionId, childSessionId: agentId, action,
       ...(message === undefined ? {} : { message }),
       ...(cascade ? { cascade: true } : {}),
     }).then(response => response.result)
@@ -459,7 +459,7 @@ export class SessionManager {
     if (api.status === undefined) {
       return { ok: false, error: { code: 'internal', message: 'subagent status unavailable' } as RpcError }
     }
-    const result = (await api.status({ parentSessionId, agentId })).result
+    const result = (await api.status({ parentSessionId, childSessionId: agentId })).result
     if (result.ok) this.subagentStatuses.set(agentId, result.value)
     return result
   }
