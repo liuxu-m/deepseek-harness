@@ -501,7 +501,7 @@ describe('SubagentRuntime.followup residency routing', () => {
     // Both messages queue behind the open turn, in call order.
     const firstMessage = await followup(ctx, parent, started.childId, message('first follow-up'))
     const secondMessage = await followup(ctx, parent, started.childId, message('second follow-up'))
-    expect(firstMessage).not.toBe(secondMessage)
+    expect(firstMessage.messageId).not.toBe(secondMessage.messageId)
     // Still the same Activation: no second child Agent was created.
     expect(ctx.agents.get(started.childId)).toBe(child)
 
@@ -516,8 +516,9 @@ describe('SubagentRuntime.followup residency routing', () => {
     const started = await ctx.subagents.startContinuable(startSpec(parent))
     await waitNoActivation(ctx, started.childId)
 
-    const messageId = await followup(ctx, parent, started.childId, message('continue please'))
-    expect(messageId).toBeTypeOf('string')
+    const receipt = await followup(ctx, parent, started.childId, message('continue please'))
+    expect(receipt).toMatchObject({ accepted: true, agentId: started.childId })
+    expect(receipt.messageId).toBeTypeOf('string')
     await waitNoActivation(ctx, started.childId)
 
     const loaded = await ctx.sessionPersistence.load(started.childId)
@@ -548,7 +549,7 @@ describe('SubagentRuntime.followup residency routing', () => {
     expect(ctx.subagents.getProvider('retired')).toBeUndefined()
 
     await expect(followup(ctx, parent, started.childId, message('continue without provider')))
-      .resolves.toBeTypeOf('string')
+      .resolves.toMatchObject({ accepted: true, agentId: started.childId })
     await waitNoActivation(ctx, started.childId)
     await vi.waitFor(() => { expect(ends).toHaveLength(2) })
 
@@ -686,7 +687,7 @@ describe('SubagentRuntime.followup residency routing', () => {
     const delivery = child.whenIdle().then(() =>
       followup(ctx, parent, started.childId, message('raced')))
 
-    await expect(delivery).resolves.toBeTypeOf('string')
+    await expect(delivery).resolves.toMatchObject({ accepted: true, agentId: started.childId })
     await waitNoActivation(ctx, started.childId)
     const loaded = await ctx.sessionPersistence.load(started.childId)
     expect(hasUserText(loaded.events, 'raced')).toBe(true)

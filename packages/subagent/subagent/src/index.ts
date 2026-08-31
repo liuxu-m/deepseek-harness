@@ -241,7 +241,7 @@ export class SubagentRuntime extends Service {
    * @param content - user-role content to deliver.
    * @param options - the message source fields and caller cancellation, which stops the
    *   operation only before inbox acceptance.
-   * @returns the accepted message's inbox id.
+   * @returns the accepted control request receipt.
    * @throws when continuation services are unavailable, parent authority is
    *   rejected, or the message was not admitted.
    */

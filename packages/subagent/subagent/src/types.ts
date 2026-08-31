@@ -33,6 +33,8 @@ export interface SubagentControlResult {
   readonly agentId: SessionId
   readonly accepted: boolean
   readonly messageId?: MessageId
+  readonly effectiveStep?: 'next-step'
+  readonly previousState?: string
 }
 
 /** Queue-only delivery options. */

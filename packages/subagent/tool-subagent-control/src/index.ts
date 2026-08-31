@@ -51,6 +51,8 @@ function waitForInbox(agent: Agent, timeoutMs: number, signal: AbortSignal): Pro
   return new Promise((resolve, reject) => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | undefined
+    // oxlint-disable-next-line prefer-const -- listener registration can synchronously invoke the callback.
+    let disposeInboxListener: (() => void) | undefined
 
     const settle = (finish: () => void): void => {
       if (settled) return
@@ -68,7 +70,7 @@ function waitForInbox(agent: Agent, timeoutMs: number, signal: AbortSignal): Pro
     }
 
     signal.addEventListener('abort', onAbort, { once: true })
-    const disposeInboxListener = agent.ctx.on('agent/inbox/inserted', onInboxInserted)
+    disposeInboxListener = agent.ctx.on('agent/inbox/inserted', onInboxInserted)
     if (signal.aborted) onAbort()
     else if (agent.inbox.hasPending) onInboxInserted()
     else {
@@ -98,6 +100,8 @@ export function apply(ctx: Context): void {
         agentId: { type: 'string', required: true },
         accepted: { type: 'boolean', required: true },
         messageId: { type: 'string' },
+        effectiveStep: { type: 'string', enum: ['next-step'] },
+        previousState: { type: 'string' },
       },
     } as const,
   }
@@ -276,7 +280,7 @@ export function apply(ctx: Context): void {
         type: 'object', additionalProperties: false,
         properties: {
           agentId: { type: 'string', required: true }, parentSessionId: { type: 'string', required: true },
-          state: { type: 'string', required: true }, pendingMessageCount: { type: 'integer', required: true },
+          state: { type: 'string', required: true, enum: ['running', 'idle', 'ready', 'completed', 'failed', 'interrupted', 'closed'] }, pendingMessageCount: { type: 'integer', required: true },
           currentTurnId: { type: 'string' }, phase: { type: 'string' }, lastActivityAt: { type: 'number' },
           lastReport: { type: 'string' }, stopReason: { type: 'string' },
         },

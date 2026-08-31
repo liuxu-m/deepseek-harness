@@ -4,9 +4,9 @@
 
 `wait_agent` 等待调用 Agent inbox 中的 pending 消息，但不读取也不移除该消息。它在下一 step 可以领取消息时返回 `Wait completed.`，在 `timeout_ms` 到期时返回 `Wait timed out.`；它自行拥有参数化 timeout，不声明静态工具 deadline。完成后模型必须结束当前 step，因为消息只会在下一 step 边界进入模型上下文。
 
-可选的全局具名 `send_message`、`interrupt_agent` 与 `list_agents` 工具是 `ctx.subagents` 之上的轻量适配器。绑定提供方的 `@deepseek-ai/dsh-tool-subagent` 实例会为每种传输注册不同的委派工具；这个单独加载的包只注册一次共享控制工具，因此多个委派工具绝不会重复注册全局控制工具。根插件注册 `send_message` 与 `interrupt_agent`，且只要求 `subagents`；可单独加载的 `./list-agents` 插件注册 `list_agents`，并将 `subagents` 与 `agents` 声明为加载时依赖。其目录读取在调用时还要求会话存储与投影注册表，但不要求任何查询服务。部署可保留根插件工具并省略列表工具。是否加载这些工具不会决定委派工具是否启动可继续工作。这些工具只负责父到子的方向；单独安装的 [`@deepseek-ai/dsh-tool-subagent-report`](../tool-subagent-report/README.zh.md) 负责子到父的方向。
+全局具名 `send_message`、`followup_task`、`steer_agent`、`interrupt_agent`、`close_agent` 与 `get_agent_status` 是 `ctx.subagents` 之上的轻量适配器。`send_message` 只排队不唤醒，`followup_task` 排队并唤醒，`steer_agent` 在下一安全 step 投递，其余工具分别执行打断、关闭和状态查询。
 
-本工具不执行生命周期路由：驻留与冷恢复归 subagent 服务所有。它将 `exec.agent` 作为授权投递的确切在线父级传入，并把每条消息的来源记录为 `{ kind: 'coordinator', senderSessionId: parent.id }`；服务会保留该来源，但绝不将其视为权限。每条消息都会通过 `Agent.followup()` 成为 subagent 的下一个 FIFO 轮次：如果子 agent（智能体）仍在工作，该消息会等待其当前轮次结束，因此无法重定向已经在进行的工作。本工具会转发其执行信号，该信号只在 inbox 接受之前掌管准入；一旦子 agent 接受消息，已接受的轮次便无法再通过本工具取消。本次调用不会返回子 agent 的回复；通过该 id 查看其 transcript（文本记录），才是了解它完成了哪些工作的真源。拥有 `report` 的子 agent 会自行把内容作为一条单独的父级消息发回。投递失败会变为出错的工具结果，并明确说明消息未送达。
+本工具不执行生命周期路由：驻留与冷恢复归 subagent 服务所有。每次控制调用都返回结构化回执；状态工具只返回快照，关闭工具返回完成的 agent id 列表。
 
 `interrupt_agent(agent_id)` 将 `exec.agent` 作为 `ctx.subagents.interrupt()` 的确切在线 ancestor 授权传入：目标可以是直接 child 或更深的后代，由服务——而不是本工具——依据目标 Activation 记录的 lineage 校验调用方。只有目标的当前轮次会停止（`keepInbox`）：已排队的消息保持暂停直到之后的 `send_message`，已发布的后代继续运行，child 也仍可接受后续消息。调用在停止请求被接受后立即返回，不等待目标完全停稳；目标不存在或已结算是被接受的 no-op，而 self、sibling、陈旧与非 ancestor 调用方会成为出错结果。
 

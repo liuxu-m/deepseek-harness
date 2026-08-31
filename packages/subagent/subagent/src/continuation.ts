@@ -506,7 +506,7 @@ export class SubagentContinuationManager {
    * @param childId - the durable child session id.
    * @param content - the user-role content to deliver.
    * @param options - the message source fields and caller cancellation.
-   * @returns the accepted message's inbox id.
+   * @returns the accepted control request receipt.
    * @throws when parent authority, availability, or admission rejects the delivery.
    */
   async followup(
@@ -521,7 +521,7 @@ export class SubagentContinuationManager {
     while (true) {
       const live = await this.locks.run(childId, async () => {
         const activation = this.activations.get(childId)
-        if (activation === undefined) return this.coldResume(parent, childId, content, options)
+        if (activation === undefined) return this.coldResume(parent, childId, content, options, true, requestId)
         // A delivery that arrives after the disposal transaction began must not
         // reach a handle being torn down; wait for release, then cold-resume.
         /* v8 ignore next 3 -- the send-versus-dispose cutoff: reaching this arm needs a
@@ -531,7 +531,7 @@ export class SubagentContinuationManager {
         if (activation.disposal !== undefined) {
           return activation.disposal.then(() => undefined, () => undefined)
         }
-        return this.submitAdmitted(activation, content, options.source, parent, options.signal)
+        return this.submitAdmitted(activation, content, options.source, parent, options.signal, requestId)
       })
       /* v8 ignore start -- only the lost-cutoff arm above returns undefined, so only that
        * race reaches the retry below, which then cold-resumes a new Activation. */
@@ -581,7 +581,7 @@ export class SubagentContinuationManager {
       this.appendControlEvent(activation, 'subagent/steer-accepted', requestId, message.id)
       return message.id
     })
-    return { requestId, agentId: childId, accepted: messageId !== undefined, ...(messageId === undefined ? {} : { messageId }) }
+    return { requestId, agentId: childId, accepted: messageId !== undefined, effectiveStep: 'next-step', ...(messageId === undefined ? {} : { messageId }) }
   }
 
   /** Close one continuable child and descendants, sharing its disposal transaction. */
@@ -603,7 +603,10 @@ export class SubagentContinuationManager {
     const requestId = SubagentControlRequestId(randomUUID())
     const activation = this.activations.get(childId)
     if (activation === undefined) {
-      throw new SubagentError(`subagent "${childId}" is not active`, 'NOT_FOUND')
+      this.closeOwners.set(childId, authority.agent)
+      const result = Promise.resolve({ requestId, agentId: childId, accepted: true, noOp: true, previousState: 'completed', closedAgentIds: [] })
+      this.closeResults.set(childId, result)
+      return result
     }
     const caller = authority.agent
     const direct = activation.parentSession === caller.id
@@ -613,17 +616,20 @@ export class SubagentContinuationManager {
     this.closeOwners.set(childId, caller)
     const previousState = this.stateOf(activation)
     const closedAgentIds: SessionId[] = []
+    const cascade = options.cascade !== false
     const collect = (item: Activation): void => {
       closedAgentIds.push(item.childId)
-      for (const id of item.ownedChildren) {
-        const child = this.activations.get(id)
-        if (child) collect(child)
+      if (cascade) {
+        for (const id of item.ownedChildren) {
+          const child = this.activations.get(id)
+          if (child) collect(child)
+        }
       }
     }
     collect(activation)
     const completion = Promise.withResolvers<SubagentCloseResult>()
     this.closeResults.set(childId, completion.promise)
-    const disposal = this.dispose(activation)
+    const disposal = this.dispose(activation, cascade)
     void (async () => {
       try {
         await disposal
@@ -662,7 +668,19 @@ export class SubagentContinuationManager {
   /** Return a service-generated status snapshot for one authorized child. */
   async status(parent: Agent, childId: SessionId): Promise<SubagentStatusSnapshot> {
     const activation = this.activations.get(childId)
-    if (activation === undefined) throw new SubagentError(`subagent "${childId}" is not active`, 'NOT_FOUND')
+    if (activation === undefined) {
+      const loaded = await this.requirePersistence().inspect(childId)
+      if (loaded.meta.parentSession !== parent.id || this.ctx.agents.get(parent.id) !== parent) throw new SubagentError('status requires a live ancestor', 'UNAUTHORIZED')
+      const closed = loaded.events.findLast(event => event.type === 'subagent/closed')
+      const lastEvent = loaded.events.at(-1)
+      return {
+        agentId: childId,
+        parentSessionId: loaded.meta.parentSession,
+        state: closed === undefined ? 'completed' : 'closed',
+        pendingMessageCount: 0,
+        ...(lastEvent === undefined ? {} : { lastActivityAt: lastEvent.time }),
+      }
+    }
     if (this.ctx.agents.get(parent.id) !== parent || (!activation.ancestry.has(parent) && activation.parentSession !== parent.id)) throw new SubagentError('status requires a live ancestor', 'UNAUTHORIZED')
     const state = this.stateOf(activation)
     const pendingMessageCount = activation.handle.agent.inbox.nextTurn.length + activation.handle.agent.inbox.nextStep.length
@@ -672,7 +690,7 @@ export class SubagentContinuationManager {
       parentSessionId: activation.parentSession,
       state: projectedState,
       pendingMessageCount,
-      lastActivityAt: Date.now(),
+      lastActivityAt: activation.handle.agent.session.events.at(-1)?.time ?? 0,
     }
   }
 
@@ -735,7 +753,7 @@ export class SubagentContinuationManager {
       }
     }
     const activation = this.activations.get(targetSessionId)
-    if (activation === undefined) return { requestId, agentId: targetSessionId, accepted: true }
+    if (activation === undefined) return { requestId, agentId: targetSessionId, accepted: true, previousState: 'completed' }
     if (authority.kind === 'user') {
       if (activation.handle.agent.session.header.parentSession !== authority.parentSessionId) {
         throw new SubagentError(
@@ -751,7 +769,8 @@ export class SubagentContinuationManager {
     }
     // Disposal already stopped the target with a whole-Activation teardown;
     // a second cancel would be a redundant signal on a closing handle.
-    if (activation.disposal !== undefined) return { requestId, agentId: targetSessionId, accepted: true }
+    if (activation.disposal !== undefined) return { requestId, agentId: targetSessionId, accepted: true, previousState: 'closed' }
+    const previousState = this.stateOf(activation)
     activation.handle.agent.cancel(
       authority.kind === 'user' ? { kind: 'user' } : { kind: 'parent' },
       { keepInbox: true },
@@ -765,7 +784,7 @@ export class SubagentContinuationManager {
       state: 'interrupted',
       ignorable: true,
     })
-    return { requestId, agentId: targetSessionId, accepted: true }
+    return { requestId, agentId: targetSessionId, accepted: true, previousState }
   }
 
   /**
@@ -1168,7 +1187,7 @@ export class SubagentContinuationManager {
       if (error instanceof SubagentError) throw error
       throw new SubagentError(`subagent "${childId}" is unavailable`, 'NOT_RESUMABLE', { cause: error })
     }
-    if (wake) return this.submitMaterialized(activation, content, options.source, parent, options.signal)
+    if (wake) return this.submitMaterialized(activation, content, options.source, parent, options.signal, requestId)
     options.signal.throwIfAborted()
     const message = createUserMessage({ content, source: options.source })
     activation.handle.agent.inbox.append('next-turn', message)
@@ -1192,9 +1211,10 @@ export class SubagentContinuationManager {
     source: MessageSource,
     parent: Agent,
     signal: AbortSignal,
+    requestId?: SubagentControlRequestId,
   ): Promise<MessageId> {
     try {
-      return this.submitAdmitted(activation, content, source, parent, signal)
+      return this.submitAdmitted(activation, content, source, parent, signal, requestId)
     } catch (error: unknown) {
       /* v8 ignore next -- rollback disposal failures must not mask the
        * pre-acceptance signal, drain, or lifecycle failure. */
@@ -1378,6 +1398,7 @@ export class SubagentContinuationManager {
     content: ContentBlock[],
     source: MessageSource,
     parent: Agent,
+    requestId?: SubagentControlRequestId,
   ): MessageId {
     // Parent-originated delivery keeps the parent live through ownership, so
     // establish it before the message can enter the child's inbox.
@@ -1389,6 +1410,7 @@ export class SubagentContinuationManager {
     // Past this point the caller has an id for this child, so its eventual
     // settlement is something the parent is owed an account of.
     activation.announced = true
+    if (requestId !== undefined) this.appendControlEvent(activation, 'subagent/message-accepted', requestId, accepted)
     return accepted
   }
 
@@ -1430,6 +1452,7 @@ export class SubagentContinuationManager {
     source: MessageSource,
     parent: Agent,
     signal: AbortSignal,
+    requestId?: SubagentControlRequestId,
   ): MessageId {
     signal.throwIfAborted()
     this.assertAdmitting(parent)
@@ -1446,7 +1469,7 @@ export class SubagentContinuationManager {
       activation.childId,
       activation.handle.agent.session.header.parentSession,
     )
-    return this.submit(activation, content, source, parent)
+    return this.submit(activation, content, source, parent, requestId)
   }
 
   /**
@@ -1524,14 +1547,14 @@ export class SubagentContinuationManager {
    * @param activation - the residency epoch to stop and release.
    * @returns the one disposal transaction owned by this Activation.
    */
-  private dispose(activation: Activation): Promise<void> {
+  private dispose(activation: Activation, cascade = true): Promise<void> {
     const existing = activation.disposal
     if (existing !== undefined) return existing
     const completion = Promise.withResolvers<void>()
     // Presence is the admission cutoff. Assign it before the async helper starts
     // because that helper cancels Agents and may synchronously re-enter callers.
     activation.disposal = completion.promise
-    void this.finishDisposal(activation).then(completion.resolve, completion.reject)
+    void this.finishDisposal(activation, cascade).then(completion.resolve, completion.reject)
     return completion.promise
   }
 
@@ -1540,16 +1563,17 @@ export class SubagentContinuationManager {
    * @param activation - the Activation whose disposal transaction is installed.
    * @returns once the handle and ownership edge are released.
    */
-  private async finishDisposal(activation: Activation): Promise<void> {
+  private async finishDisposal(activation: Activation, cascade: boolean): Promise<void> {
     this.wake(activation)
     const { childId } = activation
     // Stop top-down before the first await. Slow descendant cleanup may delay
     // release, but it cannot let this ancestor continue model or tool work.
     activation.handle.agent.cancel({ kind: 'parent' })
     const idle = activation.handle.agent.whenIdle()
-    const children = [...activation.ownedChildren]
+    const children = cascade ? [...activation.ownedChildren]
       .map(child => this.activations.get(child))
       .filter((child): child is Activation => child !== undefined)
+      : []
     const childDisposals = children.map(child => this.dispose(child))
 
     const failures: SubagentError[] = []

@@ -620,7 +620,7 @@ describe('dsh-tool-subagent-control parent controls', () => {
     expect(close.value).toMatchObject({ accepted: true, agentId: started.childId })
   })
 
-  it.each(['followup_task', 'steer_agent', 'close_agent', 'get_agent_status'])('rejects unknown target for %s', async (name) => {
+  it.each(['followup_task', 'steer_agent', 'get_agent_status'])('rejects unknown target for %s', async (name) => {
     const { ctx, parent } = await setup([])
     const args = name === 'get_agent_status'
       ? { agent_id: 'unknown' }
@@ -632,6 +632,13 @@ describe('dsh-tool-subagent-control parent controls', () => {
     const result = await callTool(ctx, name, args, parent)
     expect(result.isError).toBe(true)
     expect(text(result)).toMatch(/unavailable|not active|not found|unknown/i)
+  })
+
+  it('accepts closing an unknown target as a no-op', async () => {
+    const { ctx, parent } = await setup([])
+    const result = await callTool(ctx, 'close_agent', { agent_id: 'unknown' }, parent)
+    expect(result.isError).toBe(false)
+    expect(result.value).toMatchObject({ accepted: true, noOp: true, closedAgentIds: [] })
   })
 
   it.each(['send_message', 'followup_task', 'steer_agent', 'interrupt_agent', 'close_agent', 'get_agent_status'])('requires a calling agent for %s', async (name) => {
