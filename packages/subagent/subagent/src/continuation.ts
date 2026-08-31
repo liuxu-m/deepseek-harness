@@ -610,6 +610,9 @@ export class SubagentContinuationManager {
     if (authority.kind === 'direct-parent' && !direct) throw new SubagentError('close requires the direct parent', 'UNAUTHORIZED')
     if (authority.kind === 'ancestor' && !direct && !activation.ancestry.has(caller)) throw new SubagentError('close target is not a descendant', 'UNAUTHORIZED')
     if (!direct && options.cascade === false) throw new SubagentError('ancestor close requires cascade', 'UNAUTHORIZED')
+    if (activation.disposal !== undefined) {
+      return { requestId, agentId: childId, accepted: true, noOp: true, previousState: 'closed', closedAgentIds: [] }
+    }
     this.closeOwners.set(childId, caller)
     const previousState = this.stateOf(activation)
     const closedAgentIds: SessionId[] = []
@@ -667,12 +670,22 @@ export class SubagentContinuationManager {
     const activation = this.activations.get(childId)
     if (activation === undefined) {
       const loaded = await this.requirePersistence().inspect(childId)
-      if (loaded.meta.parentSession !== parent.id || this.ctx.agents.get(parent.id) !== parent) throw new SubagentError('status requires a live ancestor', 'UNAUTHORIZED')
+      if (this.ctx.agents.get(parent.id) !== parent) throw new SubagentError('status requires a live ancestor', 'UNAUTHORIZED')
+      const parentSessionId = loaded.meta.parentSession
+      if (parentSessionId === undefined) throw new SubagentError('status requires a live ancestor', 'UNAUTHORIZED')
+      let lineageParent: SessionId | undefined = parentSessionId
+      const visited = new Set<SessionId>()
+      while (lineageParent !== parent.id) {
+        if (lineageParent === undefined || visited.has(lineageParent)) throw new SubagentError('status requires a live ancestor', 'UNAUTHORIZED')
+        visited.add(lineageParent)
+        const ancestor = await this.requirePersistence().inspect(lineageParent)
+        lineageParent = ancestor.meta.parentSession
+      }
       const closed = loaded.events.findLast(event => event.type === 'subagent/closed')
       const lastEvent = loaded.events.at(-1)
       return {
         agentId: childId,
-        parentSessionId: loaded.meta.parentSession,
+        parentSessionId,
         state: closed === undefined ? 'completed' : 'closed',
         pendingMessageCount: 0,
         ...(lastEvent === undefined ? {} : { lastActivityAt: lastEvent.time }),

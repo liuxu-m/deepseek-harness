@@ -18,7 +18,7 @@
 
 #### 模型看到的内容
 
-已生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 包含 `subagent_id` 和 `message`，说明消息会成为 subagent 的下一个轮次、本次调用不会返回 subagent 的回答，以及失败即表示消息未送达；`interrupt_agent` 包含 `agent_id`，说明只有当前轮次会停止、已排队消息保持暂停、后代继续运行，以及接受先于实际停止；`list_agents` 包含可选的 `scope` 枚举。
+已生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control) 暴露 `send_message`、`followup_task`、`steer_agent`、`interrupt_agent`、`close_agent`、`get_agent_status` 与 `list_agents`。投递工具包含目标 id 和消息，steering 在下一安全 step 生效，中断回报先前状态，关闭回报受影响的 child id，状态工具返回服务快照。
 
 #### Token 影响
 

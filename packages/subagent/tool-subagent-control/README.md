@@ -18,7 +18,7 @@ The tool performs no lifecycle routing — residency and cold resume belong to t
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes `subagent_id` and `message`, describing that the message becomes the subagent's next turn, that this call returns no answer from the subagent, and that a failure means the message was not delivered; `interrupt_agent` takes `agent_id`, describing that only the current turn stops, queued messages park, descendants keep running, and acceptance precedes the actual stop; `list_agents` takes the optional `scope` enum.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) expose `send_message`, `followup_task`, `steer_agent`, `interrupt_agent`, `close_agent`, `get_agent_status`, and `list_agents`. Delivery tools take a target id and message, steering applies at the next safe step, interruption reports the previous state, close reports affected child ids, and status returns the service snapshot.
 
 #### Token effect
 
