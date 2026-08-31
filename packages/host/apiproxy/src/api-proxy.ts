@@ -2730,13 +2730,13 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         return Promise.resolve(ok(request, { accepted: true as const }))
       },
 
-      async control(request) {
+      async control(request, requestSignal) {
         const { parentSessionId, childSessionId, action, message, cascade } = request.payload
         const parent = ctx.agents.get(parentSessionId)
         if (parent === undefined) return err(request, { code: 'subagent-parent-unavailable', message: 'parent is not live', details: { parentSessionId } })
         const content = message === undefined ? [] : [{ type: 'text' as const, text: message }]
         try {
-          const signal = new AbortController().signal
+          const signal = requestSignal ?? new AbortController().signal
           if (action === 'interrupt') return ok(request, ctx.subagents.interrupt(childSessionId, { kind: 'ancestor', agent: parent }))
           if (action === 'close') {
             const authority = cascade ? { kind: 'ancestor' as const, agent: parent, cascade: true as const } : { kind: 'direct-parent' as const, agent: parent }
