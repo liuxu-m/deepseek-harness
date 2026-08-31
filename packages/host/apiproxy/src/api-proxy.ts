@@ -2695,6 +2695,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             },
             signal,
           })
+          if (typeof receipt === 'string') return ok(request, { messageId: receipt as unknown as import('@deepseek-ai/dsh-llm/brand').MessageId })
           if (!receipt.accepted || receipt.messageId === undefined) {
             throw new Error(`subagent "${childSessionId}" did not accept the prompt`)
           }
