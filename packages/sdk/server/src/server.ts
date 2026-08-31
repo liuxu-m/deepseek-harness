@@ -65,6 +65,7 @@ export class HarnessSdkJsonRpcServer {
   private shutdownTask: Promise<Record<string, never>> | undefined
   private shuttingDown = false
   private controlNotificationSeq = 0
+  private readonly emittedControlRequests = new Set<string>()
 
   constructor(
     private readonly ctx: Context,
@@ -105,6 +106,20 @@ export class HarnessSdkJsonRpcServer {
           parentSessionId: String(event.data.parentSessionId), requestId: String(event.data.requestId),
           action: 'close', accepted: true, closedAgentIds: event.data.closedAgentIds.map(String),
         })
+        this.emittedControlRequests.add(String(event.data.requestId))
+      } else if (event.type === 'subagent/message-accepted' || event.type === 'subagent/steer-accepted'
+        || event.type === 'subagent/interrupt-requested') {
+        const action = event.type === 'subagent/steer-accepted' ? 'steer'
+          : event.type === 'subagent/interrupt-requested' ? 'interrupt'
+            : event.data.mode
+        this.transport.notify('subagent.control', {
+          sessionId: String(event.data.parentSessionId), eventSeq: event.data.eventSeq,
+          occurredAt: event.data.occurredAt, agentId: String(event.data.agentId),
+          parentSessionId: String(event.data.parentSessionId), requestId: String(event.data.requestId),
+          action, accepted: true,
+          ...(event.data.messageId === undefined ? {} : { messageId: String(event.data.messageId) }),
+        })
+        this.emittedControlRequests.add(String(event.data.requestId))
       }
     }))
     this.disposers.push(ctx.on('agent/status', ({ agent, status }) => {
@@ -201,7 +216,7 @@ export class HarnessSdkJsonRpcServer {
         result = await runtime.close(SessionId(params.agentId), authority, { cascade: params.cascade === true }); break
       }
     }
-    if (params.action !== 'close') this.transport.notify('subagent.control', {
+    if (!this.emittedControlRequests.delete(String(result.requestId))) this.transport.notify('subagent.control', {
       sessionId: params.parentSessionId, eventSeq: ++this.controlNotificationSeq,
       occurredAt: Date.now(), agentId: params.agentId, parentSessionId: params.parentSessionId,
       action: params.action, accepted: result.accepted, requestId: String(result.requestId),
