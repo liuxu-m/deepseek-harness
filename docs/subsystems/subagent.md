@@ -513,11 +513,52 @@ async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>
  * @param content - user-role content to deliver.
  * @param options - the message source fields and caller cancellation, which stops the
  *   operation only before inbox acceptance.
- * @returns the accepted message's inbox id.
+ * @returns the accepted control request receipt.
  * @throws when continuation services are unavailable, parent authority is
  *   rejected, or the message was not admitted.
  */
-async followup( parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions, ): Promise<MessageId>
+async followup( parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions, ): Promise<SubagentControlResult>
+
+/**
+ * Queue content without waking the child driver.
+ * @param parent - exact live direct parent.
+ * @param childId - durable continuable child id.
+ * @param content - user content to enqueue.
+ * @param options - source and cancellation signal.
+ * @returns acceptance receipt.
+ * @throws when authority or admission is rejected.
+ */
+async queue(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentQueueOptions): Promise<SubagentControlResult>
+
+/**
+ * Wake a child and deliver content at the next safe step.
+ * @param parent - exact live direct parent.
+ * @param childId - durable child id.
+ * @param content - steering content.
+ * @param options - source and cancellation signal.
+ * @returns acceptance receipt.
+ * @throws when authority or admission is rejected.
+ */
+async steer(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentSteerOptions): Promise<SubagentControlResult>
+
+/**
+ * Close one child subtree under explicit authority.
+ * @param childId - durable child id.
+ * @param authority - direct-parent or cascading ancestor authority.
+ * @param options - optional cascade policy.
+ * @returns the shared close result.
+ * @throws when authority is stale or unauthorized.
+ */
+async close(childId: SessionId, authority: SubagentCloseAuthority, options?: SubagentCloseOptions): Promise<SubagentCloseResult>
+
+/**
+ * Query one authorized child status snapshot.
+ * @param parent - exact live ancestor.
+ * @param childId - durable child id.
+ * @returns current status snapshot.
+ * @throws when the child is unknown or outside the caller lineage.
+ */
+async status(parent: Agent, childId: SessionId): Promise<SubagentStatusSnapshot>
 
 /**
  * Interrupt one live continuable child's current turn under a human parent
@@ -531,10 +572,11 @@ async followup( parent: Agent, childId: SessionId, content: ContentBlock[], opti
  * live Activation.
  * @param targetSessionId - the durable child session id to interrupt.
  * @param authority - the human parent address or exact live ancestor Agent.
+ * @returns acceptance receipt with the target's previous state when known.
  * @throws {SubagentError} `UNAUTHORIZED` when the authority does not own the
  *   live target.
  */
-interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void
+interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): SubagentControlResult
 
 /**
  * Deliver selected content from one live continuable child to its durable

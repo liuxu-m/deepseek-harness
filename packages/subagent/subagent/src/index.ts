@@ -323,6 +323,7 @@ export class SubagentRuntime extends Service {
    * live Activation.
    * @param targetSessionId - the durable child session id to interrupt.
    * @param authority - the human parent address or exact live ancestor Agent.
+   * @returns acceptance receipt with the target's previous state when known.
    * @throws {SubagentError} `UNAUTHORIZED` when the authority does not own the
    *   live target.
    */

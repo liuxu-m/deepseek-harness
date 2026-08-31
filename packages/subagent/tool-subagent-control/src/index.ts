@@ -71,6 +71,10 @@ function waitForInbox(agent: Agent, timeoutMs: number, signal: AbortSignal): Pro
 
     signal.addEventListener('abort', onAbort, { once: true })
     disposeInboxListener = agent.ctx.on('agent/inbox/inserted', onInboxInserted)
+    if (settled) {
+      disposeInboxListener?.()
+      disposeInboxListener = undefined
+    }
     if (signal.aborted) onAbort()
     else if (agent.inbox.hasPending) onInboxInserted()
     else {

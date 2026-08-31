@@ -603,10 +603,7 @@ export class SubagentContinuationManager {
     const requestId = SubagentControlRequestId(randomUUID())
     const activation = this.activations.get(childId)
     if (activation === undefined) {
-      this.closeOwners.set(childId, authority.agent)
-      const result = Promise.resolve({ requestId, agentId: childId, accepted: true, noOp: true, previousState: 'completed', closedAgentIds: [] })
-      this.closeResults.set(childId, result)
-      return result
+      return Promise.resolve({ requestId, agentId: childId, accepted: true, noOp: true, previousState: 'completed', closedAgentIds: [] })
     }
     const caller = authority.agent
     const direct = activation.parentSession === caller.id

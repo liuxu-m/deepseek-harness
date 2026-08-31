@@ -869,7 +869,7 @@ describe('continuable durability and teardown', () => {
     expect(ctx.agents.get(grandchild.childId)).toBeDefined()
     expect(ctx.agents.get(sibling.childId)).toBe(siblingChild)
     await expect(followup(ctx, siblingParent, sibling.childId, message('still live')))
-      .resolves.toBeTypeOf('string')
+      .resolves.toMatchObject({ accepted: true, agentId: sibling.childId })
     await expect(ctx.subagents.startContinuable(startSpec(parent)))
       .rejects.toMatchObject({ code: 'DRAINING' })
     await expect(followup(ctx, parent, target.childId, message('too late')))
@@ -1183,7 +1183,7 @@ describe('continuable durability and teardown', () => {
     const drained = drainManager(ctx)
     hold.resolve(undefined)
 
-    await expect(delivery).resolves.toBeTypeOf('string')
+    await expect(delivery).resolves.toMatchObject({ accepted: true, agentId: started.childId })
     await drained
     expect(order).toEqual(['enqueue', 'cancel'])
   })
@@ -2234,7 +2234,6 @@ describe('continuable public API', () => {
       'kill',
       'report',
       'resume',
-      'steer',
       'steerContinuable',
       'userAuthority',
     ]) {
