@@ -21,6 +21,9 @@ import type {
   SessionEventNotification,
   SessionPromptParams,
   SessionPromptResult,
+  SubagentControlResultWire,
+  SubagentControlParams,
+  SubagentStatusParams,
   SubagentFinishedNotification,
   SubagentStartedNotification,
 } from '@deepseek-ai/dsh-sdk-protocol'
@@ -71,6 +74,13 @@ export class HarnessSdkJsonRpcServer {
     this.disposers.push(ctx.on('session/event', (session, event) => {
       const payload: SessionEventNotification = { sessionId: String(session.id), event }
       this.transport.notify('session.event', payload)
+      if (event.type === 'subagent/progress') {
+        this.transport.notify('subagent.progress', { sessionId: String(session.id), ...event.data })
+      } else if (event.type === 'subagent/message-accepted' || event.type === 'subagent/steer-accepted'
+        || event.type === 'subagent/interrupt-requested' || event.type === 'subagent/closed') {
+        this.transport.notify('subagent.control', { sessionId: String(session.id), ...event.data,
+          action: event.type.replace('subagent/', '').replace('-accepted', '').replace('-requested', '') })
+      }
     }))
     this.disposers.push(ctx.on('agent/status', ({ agent, status }) => {
       this.transport.notify('session.status', { sessionId: String(agent.session.id), status })
@@ -142,6 +152,38 @@ export class HarnessSdkJsonRpcServer {
     return { messageId: message.id }
   }
 
+  /** Execute one parent-authorized child control operation. */
+  async control(params: SubagentControlParams): Promise<SubagentControlResultWire> {
+    const parent = await this.getOrCreateSession(params.parentSessionId)
+    if (this.ctx.agents.get(parent.handle.agent.id) !== parent.handle.agent) {
+      throw new Error(`session agent was disposed outside the server: ${params.parentSessionId}`)
+    }
+    const runtime = this.ctx.get('subagents') as SubagentRuntime | undefined
+    if (runtime === undefined) throw new Error('subagent control capability is unavailable')
+    const content = params.message === undefined ? [] : [{ type: 'text' as const, text: params.message }]
+    const source = { kind: 'user' as const }
+    switch (params.action) {
+      case 'queue': return runtime.queue(parent.handle.agent, SessionId(params.agentId), content, { source, signal: new AbortController().signal })
+      case 'followup': return runtime.followup(parent.handle.agent, SessionId(params.agentId), content, { source, signal: new AbortController().signal })
+      case 'steer': return runtime.steer(parent.handle.agent, SessionId(params.agentId), content, { source, signal: new AbortController().signal })
+      case 'interrupt': return runtime.interrupt(SessionId(params.agentId), { kind: 'ancestor', agent: parent.handle.agent })
+      case 'close': {
+        const authority = params.cascade === true
+          ? { kind: 'ancestor' as const, agent: parent.handle.agent, cascade: true as const }
+          : { kind: 'direct-parent' as const, agent: parent.handle.agent }
+        return runtime.close(SessionId(params.agentId), authority, { cascade: params.cascade === true })
+      }
+    }
+  }
+
+  /** Read one parent-authorized child status snapshot. */
+  async status(params: SubagentStatusParams): Promise<unknown> {
+    const parent = await this.getOrCreateSession(params.parentSessionId)
+    const runtime = this.ctx.get('subagents') as SubagentRuntime | undefined
+    if (runtime === undefined) throw new Error('subagent status capability is unavailable')
+    return runtime.status(parent.handle.agent, SessionId(params.agentId))
+  }
+
   /**
    * Dispose server-owned agents, adapter, and subscriptions to quiescence.
    * The surrounding context remains running.
@@ -193,6 +235,10 @@ export class HarnessSdkJsonRpcServer {
         return this.initialize(params as unknown as InitializeParams)
       case 'session/prompt':
         return this.prompt(params as unknown as SessionPromptParams)
+      case 'subagent/control':
+        return this.control(params as unknown as SubagentControlParams)
+      case 'subagent/status':
+        return this.status(params as unknown as SubagentStatusParams)
       case 'shutdown':
         return this.shutdown()
       default:

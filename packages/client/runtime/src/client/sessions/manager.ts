@@ -60,6 +60,18 @@ export interface SubagentCatalogSnapshot extends SubagentCatalog {
   error: RpcError | null
 }
 
+/** Client-visible status projection for one controlled child. */
+export interface SubagentStatusSnapshot {
+  agentId: SessionId
+  parentSessionId: SessionId
+  state: string
+  phase?: string
+  lastActivityAt?: number
+  lastReport?: string
+  pendingMessageCount: number
+  stopReason?: string
+}
+
 interface CatalogInflight {
   readonly promise: Promise<void>
   readonly expandableRows: Set<SessionId>
@@ -147,6 +159,7 @@ export class SessionManager {
    * is stored as an absent key, so absence and `[]` are one representation.
    */
   private readonly jobsBySession = new Map<SessionId, readonly JobView[]>()
+  private readonly subagentStatuses = new Map<SessionId, SubagentStatusSnapshot>()
 
   private selected: SessionId | undefined
 
@@ -412,6 +425,48 @@ export class SessionManager {
       parentAvailableOverride: undefined,
     })
     return operation
+  }
+
+  /** Send one parent-authorized control operation to a child. */
+  controlSubagent(
+    parentSessionId: SessionId,
+    agentId: SessionId,
+    action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close',
+    message?: string,
+    cascade = false,
+  ): Promise<RpcResult<unknown>> {
+    const api = this.api.subagents as typeof this.api.subagents & {
+      control?: (request: unknown) => Promise<{ result: RpcResult<unknown> }>
+    }
+    if (api.control === undefined) {
+      return Promise.resolve({
+        ok: false,
+        error: { code: 'internal', message: 'subagent control unavailable' } as RpcError,
+      })
+    }
+    return api.control({
+      parentSessionId, agentId, action,
+      ...(message === undefined ? {} : { message }),
+      ...(cascade ? { cascade: true } : {}),
+    }).then(response => response.result)
+  }
+
+  /** Query one child status and retain it for UI consumers. */
+  async getSubagentStatus(parentSessionId: SessionId, agentId: SessionId): Promise<RpcResult<SubagentStatusSnapshot>> {
+    const api = this.api.subagents as typeof this.api.subagents & {
+      status?: (request: unknown) => Promise<{ result: RpcResult<SubagentStatusSnapshot> }>
+    }
+    if (api.status === undefined) {
+      return { ok: false, error: { code: 'internal', message: 'subagent status unavailable' } as RpcError }
+    }
+    const result = (await api.status({ parentSessionId, agentId })).result
+    if (result.ok) this.subagentStatuses.set(agentId, result.value)
+    return result
+  }
+
+  /** Read the last confirmed status for a child. */
+  subagentStatus(agentId: SessionId): SubagentStatusSnapshot | undefined {
+    return this.subagentStatuses.get(agentId)
   }
 
   /**

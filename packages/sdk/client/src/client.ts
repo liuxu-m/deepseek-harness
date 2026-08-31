@@ -19,6 +19,9 @@ import {
   type InitializeParams,
   type InitializeResult,
   type SessionPromptParams,
+  type SubagentControlParams,
+  type SubagentControlResultWire,
+  type SubagentStatusParams,
 } from '@deepseek-ai/dsh-sdk-protocol'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { disposeRuntimeProcess } from './dispose.ts'
@@ -187,6 +190,7 @@ export class HarnessClient {
   private readonly stderrTail: string[] = []
   private readonly subscriptions = new Map<string, NotificationSubscriptionImpl>()
   private readonly sessionParents = new Map<string, string>()
+  private readonly subagentStatusCache = new Map<string, { eventSeq: number; occurredAt: number; status: Record<string, unknown> }>()
   private subscriptionSerial = 0
   private exitCode: number | null | undefined
   private spawnError: Error | undefined
@@ -287,6 +291,35 @@ export class HarnessClient {
       throw new SdkProtocolError(`session/prompt returned no message id: ${JSON.stringify(result)}`)
     }
     return result.messageId
+  }
+
+  /** Send a parent-authorized subagent control request. */
+  async controlSubagent(params: SubagentControlParams): Promise<SubagentControlResultWire> {
+    const result = await this.request('subagent/control', { ...params })
+    if (!isRecord(result) || typeof result.requestId !== 'string' || typeof result.agentId !== 'string'
+      || typeof result.accepted !== 'boolean') {
+      throw new SdkProtocolError(`subagent/control returned malformed result: ${JSON.stringify(result)}`)
+    }
+    return result as unknown as SubagentControlResultWire
+  }
+
+  /** Query and refresh one child status snapshot. */
+  async getSubagentStatus(params: SubagentStatusParams): Promise<Record<string, unknown>> {
+    const result = await this.request('subagent/status', { ...params })
+    if (!isRecord(result) || typeof result.agentId !== 'string' || typeof result.state !== 'string') {
+      throw new SdkProtocolError(`subagent/status returned malformed result: ${JSON.stringify(result)}`)
+    }
+    this.subagentStatusCache.set(params.agentId, {
+      eventSeq: Number.MAX_SAFE_INTEGER,
+      occurredAt: typeof result.lastActivityAt === 'number' ? result.lastActivityAt : 0,
+      status: result,
+    })
+    return result
+  }
+
+  /** Return the last notification-derived status without guessing a state. */
+  cachedSubagentStatus(agentId: string): Record<string, unknown> | undefined {
+    return this.subagentStatusCache.get(agentId)?.status
   }
 
   /**
@@ -402,7 +435,23 @@ export class HarnessClient {
 
   private dispatchNotification(notification: HarnessNotification): void {
     this.recordSessionRelationship(notification)
+    this.recordSubagentStatus(notification)
     for (const subscription of this.subscriptions.values()) subscription.push(notification)
+  }
+
+  private recordSubagentStatus(notification: HarnessNotification): void {
+    if (notification.method !== 'subagent.progress' && notification.method !== 'subagent.control') return
+    const params = notification.params
+    const agentId = params.agentId
+    const eventSeq = params.eventSeq
+    const occurredAt = params.occurredAt
+    if (typeof agentId !== 'string' || typeof eventSeq !== 'number' || typeof occurredAt !== 'number') return
+    const previous = this.subagentStatusCache.get(agentId)
+    if (previous !== undefined
+      && (eventSeq < previous.eventSeq || (eventSeq === previous.eventSeq && occurredAt <= previous.occurredAt))) return
+    const status = previous?.status === undefined ? { ...params } : { ...previous.status, ...params }
+    if (notification.method === 'subagent.control' && params.action === 'close') status.state = 'closed'
+    this.subagentStatusCache.set(agentId, { eventSeq, occurredAt, status })
   }
 
   private recordSessionRelationship(notification: HarnessNotification): void {
