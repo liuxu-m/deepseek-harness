@@ -1,5 +1,6 @@
 import {
   useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent,
+  type ReactElement,
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -24,6 +25,8 @@ export interface SubagentCatalogInjected {
   openChild: (address: SubagentAddress) => void
   refresh: (parentSessionId: SessionId) => void
   setCatalogOpen: (parentSessionId: SessionId, open: boolean) => void
+  controlSubagent?: (parentSessionId: SessionId, agentId: SessionId, action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close') => Promise<unknown>
+  getSubagentStatus?: (parentSessionId: SessionId, agentId: SessionId) => Promise<unknown>
 }
 
 /** Full props for the session-header lineage renderer. */
@@ -41,6 +44,7 @@ interface CatalogRowsProps {
   now: number
   openChild: (address: SubagentAddress) => void
   refresh: (parentSessionId: SessionId) => void
+  controlSubagent?: (parentSessionId: SessionId, agentId: SessionId, action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close') => Promise<unknown>
   toggleBranch: (childSessionId: SessionId) => void
   closeCatalog: () => void
 }
@@ -236,7 +240,7 @@ function CatalogLoadingRows({
 /** Render one catalog level and recurse only through explicitly expanded rows. */
 function CatalogRows({
   parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level, now,
-  openChild, refresh, toggleBranch, closeCatalog, t,
+  openChild, refresh, toggleBranch, closeCatalog, controlSubagent, t,
 }: CatalogRowsProps & { t: TranslateNS<typeof NS> }) {
   const emptyLoading = catalog.state === 'loading' && catalog.entries.length === 0
   const reserveDisclosure = catalog.entries.some(
@@ -320,6 +324,28 @@ function CatalogRows({
         const metrics = [tokenMetric, durationMetric?.exact]
           .filter(value => value !== undefined)
           .join(' · ')
+        const ControlMenu = (): ReactElement | null => {
+          if (controlSubagent === undefined) return null
+          const [confirmation, setConfirmation] = useState<string>()
+          const send = (action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close'): void => {
+            void controlSubagent(parentSessionId, entry.id, action).then((result: unknown) => {
+              const requestId = typeof result === 'object' && result !== null && 'requestId' in result
+                ? String((result as { requestId: unknown }).requestId)
+                : ''
+              setConfirmation(requestId === '' ? t('control.confirmed') : t('control.request', { requestId }))
+            }, () => { setConfirmation(t('control.failed')) })
+          }
+          return (
+            <span className={css.controls} onClick={event => event.stopPropagation()}>
+              <button type="button" onClick={() => send('queue')}>{t('control.queue')}</button>
+              <button type="button" onClick={() => send('followup')}>{t('control.followup')}</button>
+              <button type="button" onClick={() => send('steer')}>{t('control.steer')}</button>
+              <button type="button" onClick={() => send('interrupt')}>{t('control.interrupt')}</button>
+              <button type="button" onClick={() => send('close')}>{t('control.close')}</button>
+              {confirmation !== undefined && <span role="status">{confirmation}</span>}
+            </span>
+          )
+        }
 
         const open = (): void => {
           openChild({ parentSessionId, childSessionId: entry.id, mode: entry.mode })
@@ -377,6 +403,7 @@ function CatalogRows({
                   <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{label}</span>
                   <span className={css.summary}>{secondary}</span>
                 </span>
+                <ControlMenu />
                 {metrics !== '' && (
                   <span className={css.metrics}>
                     {tokenMetric !== undefined && <span className={css.metricToken}>{tokenMetric}</span>}
@@ -421,6 +448,7 @@ function CatalogRows({
                       refresh={refresh}
                       toggleBranch={toggleBranch}
                       closeCatalog={closeCatalog}
+                      {...controlSubagent === undefined ? {} : { controlSubagent }}
                       t={t}
                     />
                   )}
@@ -480,7 +508,7 @@ function catalogMenuPosition(trigger: HTMLButtonElement): CSSProperties {
 /** One trigger-plus-tree dropdown over the catalog rooted at `rootSessionId`. */
 function CatalogDropdown({
   rootSessionId, currentSessionId, displayTitle, openTitle, variant, separator = false,
-  useSessions, openChild, refresh, setCatalogOpen, t,
+  useSessions, openChild, refresh, setCatalogOpen, controlSubagent, t,
 }: CatalogDropdownProps) {
   const ancestorSwitcher = variant === 'switcher' && openTitle !== undefined
   const catalogs = useSessions(state => state.subagentsByParent)
@@ -796,6 +824,7 @@ function CatalogDropdown({
             refresh={refresh}
             toggleBranch={toggleBranch}
             closeCatalog={() => { changeOpen(false) }}
+            {...controlSubagent === undefined ? {} : { controlSubagent }}
             t={t}
           />
         </div>
@@ -811,13 +840,16 @@ function CatalogDropdown({
  */
 export function SubagentHeaderLineage({
   lineageSessionId, displayTitle, openTitle,
-  useSessions, openChild, refresh, setCatalogOpen, t,
+  useSessions, openChild, refresh, setCatalogOpen, controlSubagent, t,
 }: SubagentHeaderLineageProps) {
   const parentId = useSessions((state) => {
     const summary = state.byId[lineageSessionId]
     return summary?.origin === 'subagent' ? summary.parentId : undefined
   })
-  const shared = { useSessions, openChild, refresh, setCatalogOpen, t }
+  const shared = {
+    useSessions, openChild, refresh, setCatalogOpen, t,
+    ...(controlSubagent === undefined ? {} : { controlSubagent }),
+  }
   if (parentId === undefined) {
     return (
       <CatalogDropdown

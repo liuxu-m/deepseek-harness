@@ -62,6 +62,18 @@ export interface ISessions {
    * @returns completion of the current or newly started refresh.
    */
   refreshSubagents(parentSessionId: SessionId): Promise<void>
+  /** Send one parent-authorized control operation to a child. */
+  controlSubagent?(
+    parentSessionId: SessionId,
+    agentId: SessionId,
+    action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close',
+    message?: string,
+    cascade?: boolean,
+  ): Promise<RpcResult<unknown>>
+  /** Query one child status snapshot. */
+  getSubagentStatus?(parentSessionId: SessionId, agentId: SessionId): Promise<RpcResult<unknown>>
+  /** Read the last confirmed child status, when available. */
+  subagentStatus?(agentId: SessionId): unknown
 
   /**
    * Record the composition one session now runs. The agent-preset seat calls
