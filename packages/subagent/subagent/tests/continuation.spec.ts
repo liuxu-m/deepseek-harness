@@ -2688,3 +2688,20 @@ describe('SubagentRuntime.interrupt', () => {
     await drained
   })
 })
+
+describe('SubagentRuntime.close persistence', () => {
+  it('persists closed event after handle disposal with continuous sequence', async () => {
+    const hold = Promise.withResolvers<undefined>()
+    const { ctx, parent } = await setupWith(new GatedAdapter([{ chunks: textResponse('done'), gate: hold.promise }]))
+    const started = await ctx.subagents.startContinuable(startSpec(parent))
+    const resultPromise = ctx.subagents.close(started.childId, { kind: 'direct-parent', agent: parent })
+    hold.resolve(undefined)
+    const result = await resultPromise
+    expect(result.accepted).toBe(true)
+    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const closed = loaded.events.filter(event => event.type === 'subagent/closed')
+    expect(closed).toHaveLength(1)
+    expect(closed[0]?.seq).toBe(loaded.events.length - 1)
+    expect(closed[0]?.type).toBe('subagent/closed')
+  })
+})
