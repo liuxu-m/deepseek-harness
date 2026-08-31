@@ -585,6 +585,14 @@ export class SubagentContinuationManager {
 
   /** Close one continuable child and descendants, sharing its disposal transaction. */
   async close(childId: SessionId, authority: SubagentCloseAuthority, options: SubagentCloseOptions = {}): Promise<SubagentCloseResult> {
+    return this.locks.run(childId, () => this.closeUnlocked(childId, authority, options))
+  }
+
+  private async closeUnlocked(
+    childId: SessionId,
+    authority: SubagentCloseAuthority,
+    options: SubagentCloseOptions,
+  ): Promise<SubagentCloseResult> {
     this.validateCloseAuthority(authority, childId)
     const existingResult = this.closeResults.get(childId)
     if (existingResult !== undefined) {
@@ -620,6 +628,7 @@ export class SubagentContinuationManager {
     const disposal = this.dispose(activation)
     void (async () => {
       try {
+        await disposal
         activation.handle.agent.session.append('subagent/closed', {
           eventSeq: ++this.controlSequence,
           occurredAt: Date.now(),
@@ -632,7 +641,6 @@ export class SubagentContinuationManager {
         })
         const sessions = this.ctx.get('sessions')
         if (sessions !== undefined) await sessions.flush(activation.handle.agent.session)
-        await disposal
         completion.resolve({ requestId, agentId: childId, accepted: true, noOp: false, previousState, closedAgentIds })
       } catch (error: unknown) {
         completion.reject(error)
