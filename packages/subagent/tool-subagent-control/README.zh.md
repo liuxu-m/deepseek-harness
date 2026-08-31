@@ -8,6 +8,12 @@
 
 本工具不执行生命周期路由：驻留与冷恢复归 subagent 服务所有。每次控制调用都返回结构化回执；状态工具只返回快照，关闭工具返回完成的 agent id 列表。
 
+## 控制语义
+
+`send_message` 接受 FIFO 工作但不唤醒停驻的 child；`followup_task` 接受相同的后续轮次工作并唤醒它；`steer_agent` 会在下一安全 step 安排纠偏上下文。这三者都要求确切的在线直接父级。`interrupt_agent` 对在线祖先可用，只停止当前轮次，保留已排队工作与后代。`close_agent` 要求直接父级或级联祖先权限，关闭指定的 child 子树并返回已关闭 id；已接受的关闭或中断回执不保证 child 已完全停稳。`get_agent_status` 读取一个已授权的状态快照，不能用作轮询循环。
+
+控制回执和持久化进度观测会作为通知投影给 SDK 与 UI 消费方。它们暴露被接受的请求与 child 状态，不暴露隐藏提示词、工具输入或无边界的 child transcript。child 会话及其 descriptor 在进程驻留变化后仍是恢复记录。
+
 `interrupt_agent(agent_id)` 将 `exec.agent` 作为 `ctx.subagents.interrupt()` 的确切在线 ancestor 授权传入：目标可以是直接 child 或更深的后代，由服务——而不是本工具——依据目标 Activation 记录的 lineage 校验调用方。只有目标的当前轮次会停止（`keepInbox`）：已排队的消息保持暂停直到之后的 `send_message`，已发布的后代继续运行，child 也仍可接受后续消息。调用在停止请求被接受后立即返回，不等待目标完全停稳；目标不存在或已结算是被接受的 no-op，而 self、sibling、陈旧与非 ancestor 调用方会成为出错结果。
 
 `list_agents` 接受一个可选的 `scope` 参数，会从调用它的 agent 推导根 id，并且不使用 cursor，将服务目录投影为可继续 child。默认的 `children` scope 读取 `ctx.subagents.listChildren()`；`descendants` 读取 `ctx.subagents.listDescendants()`，其单份语料的遍历会穿过普通会话与一次性 child，并按稳定 pre-order 以 `parent=<id> depth=<n>` 渲染保留下来的条目。`parent` 注释是持久化直接 parent 会话 id，可能指向输出中省略的普通会话。对于调用本工具的 agent，只有 depth-1 child 条目可作为 `send_message` 候选；更深的 child 条目只能作为 `interrupt_agent` 候选。状态来自在线 Agent 注册表：`running`（driver 活跃）、`idle`（驻留但处于轮次之间，可能在等待它启动的 agent）或 `ready`（仅存于存储，表示可恢复而非终态）。服务结果还包含由会话支撑的一次性 subagent，以供 UI 等消费方使用；但这些条目无法接受 `send_message`，因此会从这个模型工具中排除。diagnostic 仍然可见，并在 descendants scope 中带有位置。持久化身份和模式来自每个子 agent 的描述符，消息送达时的鉴权和 Activation 所有权检查仍归服务负责。
