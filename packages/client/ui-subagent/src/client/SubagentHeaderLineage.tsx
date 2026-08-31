@@ -330,6 +330,11 @@ function CatalogRows({
           const [confirmation, setConfirmation] = useState<string>()
           const send = (action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close'): void => {
             void controlSubagent(parentSessionId, entry.id, action).then((result: unknown) => {
+              if (typeof result === 'object' && result !== null && 'ok' in result
+                && (result as { ok?: unknown }).ok === false) {
+                setConfirmation(t('control.failed'))
+                return
+              }
               const requestId = typeof result === 'object' && result !== null && 'requestId' in result
                 ? String((result as { requestId: unknown }).requestId)
                 : ''
