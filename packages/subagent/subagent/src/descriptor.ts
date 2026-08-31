@@ -24,6 +24,19 @@
 import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
+import type { MessageId } from '@deepseek-ai/dsh-llm'
+import type { SubagentControlRequestId } from './types.ts'
+
+interface SubagentControlEvent {
+  readonly eventSeq: number
+  readonly occurredAt: number
+  readonly agentId: import('@deepseek-ai/dsh-session').SessionId
+  readonly parentSessionId: import('@deepseek-ai/dsh-session').SessionId
+  readonly requestId: SubagentControlRequestId
+  readonly messageId: MessageId
+  readonly state: string
+  readonly ignorable: true
+}
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
@@ -35,6 +48,16 @@ declare module '@deepseek-ai/dsh-session/types' {
      * model history, and survives compaction.
      */
     'subagent/descriptor': SubagentDescriptorData
+    /** Queue message accepted by a child. */
+    'subagent/message-accepted': SubagentControlEvent
+    /** Steering message accepted by a child. */
+    'subagent/steer-accepted': SubagentControlEvent
+    /** Interrupt request registered for a child. */
+    'subagent/interrupt-requested': Omit<SubagentControlEvent, 'messageId'> & { readonly messageId?: MessageId }
+    /** Child close transaction completed. */
+    'subagent/closed': Omit<SubagentControlEvent, 'messageId'> & { readonly closedAgentIds: readonly import('@deepseek-ai/dsh-session').SessionId[] }
+    /** Progress projection update. */
+    'subagent/progress': Omit<SubagentControlEvent, 'requestId' | 'messageId'> & { readonly pendingMessageCount: number }
   }
 }
 

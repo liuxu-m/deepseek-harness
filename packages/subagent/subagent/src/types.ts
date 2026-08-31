@@ -11,10 +11,80 @@
 
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { ObjectJsonSchema, ToolRestriction } from '@deepseek-ai/dsh-tools'
 import type { SubagentDescriptorData } from './descriptor.ts'
+
+/** Parent-to-child message scheduling mode. */
+export type SubagentMessageMode = 'queue' | 'followup' | 'steer'
+
+/** Opaque identity for one parent control request. */
+export type SubagentControlRequestId = Branded<'SubagentControlRequestId'>
+
+/** Brand a raw control request id. */
+export function SubagentControlRequestId(id: string): SubagentControlRequestId {
+  return id as SubagentControlRequestId
+}
+
+/** Snapshot returned by a parent control operation. */
+export interface SubagentControlResult {
+  readonly requestId: SubagentControlRequestId
+  readonly agentId: SessionId
+  readonly accepted: boolean
+  readonly messageId?: MessageId
+}
+
+/** Queue-only delivery options. */
+export interface SubagentQueueOptions {
+  readonly source: MessageSource
+  readonly signal: AbortSignal
+}
+
+/** Follow-up delivery options. */
+export interface SubagentFollowupOptions {
+  readonly source: MessageSource
+  readonly signal: AbortSignal
+}
+
+/** Steering delivery options. */
+export interface SubagentSteerOptions {
+  readonly source: MessageSource
+  readonly signal: AbortSignal
+}
+
+/** Authority for closing a direct child or descendant. */
+export type SubagentCloseAuthority =
+  | { readonly kind: 'direct-parent'; readonly agent: Agent }
+  | { readonly kind: 'ancestor'; readonly agent: Agent; readonly cascade: true }
+
+/** Close operation options. */
+export interface SubagentCloseOptions {
+  readonly cascade?: boolean
+}
+
+/** Detailed result of a close operation. */
+export interface SubagentCloseResult extends SubagentControlResult {
+  readonly closedAgentIds: readonly SessionId[]
+  readonly previousState: string
+  readonly noOp: boolean
+}
+
+/** Opaque identity for one child turn. */
+export type SubagentTurnId = Branded<'SubagentTurnId'>
+
+/** Service-generated status snapshot for one child. */
+export interface SubagentStatusSnapshot {
+  readonly agentId: SessionId
+  readonly parentSessionId: SessionId
+  readonly state: 'running' | 'idle' | 'ready' | 'completed' | 'failed' | 'interrupted' | 'closed'
+  readonly currentTurnId?: SubagentTurnId
+  readonly phase?: string
+  readonly lastActivityAt?: number
+  readonly lastReport?: string
+  readonly pendingMessageCount: number
+  readonly stopReason?: string
+}
 
 /** Identifies one accepted subagent run across its lifecycle event pair. */
 export type SubagentRunId = Branded<'SubagentRunId'>

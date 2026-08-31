@@ -31,6 +31,7 @@
  * @module @deepseek-ai/dsh-subagent
  */
 
+import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
@@ -43,12 +44,20 @@ import type {
   ContinuableCreateSpec,
   ResolvedSubagentStartRequest,
   SubagentCapabilities,
+  SubagentCloseAuthority,
+  SubagentCloseOptions,
+  SubagentCloseResult,
+  SubagentControlResult,
+  SubagentQueueOptions,
+  SubagentStatusSnapshot,
+  SubagentSteerOptions,
   SubagentProvider,
   SubagentRun,
   SubagentRunEndInfo,
   SubagentRunInfo,
   SubagentStartRequest,
 } from './types.ts'
+import { SubagentControlRequestId } from './types.ts'
 import { SubagentError } from './error.ts'
 import { assertSubagentMaxDepth } from './depth.ts'
 import { createActivationObserver, createLifecycleEmitter, observeRun } from './lifecycle.ts'
@@ -70,12 +79,20 @@ import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinitio
 
 export * from './out-of-process.ts'
 export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts'
-export { SubagentRunId } from './types.ts'
+export { SubagentRunId, SubagentControlRequestId } from './types.ts'
 export type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
   ResolvedSubagentStartRequest,
   SubagentCapabilities,
+  SubagentCloseAuthority,
+  SubagentCloseOptions,
+  SubagentCloseResult,
+  SubagentControlResult,
+  SubagentMessageMode,
+  SubagentQueueOptions,
+  SubagentStatusSnapshot,
+  SubagentSteerOptions,
   SubagentProvider,
   SubagentResult,
   SubagentRun,
@@ -237,6 +254,31 @@ export class SubagentRuntime extends Service {
     return this.requireContinuations().followup(parent, childId, content, options)
   }
 
+  /** Queue content without waking the child driver. */
+  async queue(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentQueueOptions): Promise<SubagentControlResult> {
+    return this.requireContinuations().queue(parent, childId, content, options)
+  }
+
+  /** Wake a child and deliver content at the next safe step. */
+  async steer(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentSteerOptions): Promise<SubagentControlResult> {
+    return this.requireContinuations().steer(parent, childId, content, options)
+  }
+
+  /** Close one child subtree under explicit authority. */
+  async close(childId: SessionId, authority: SubagentCloseAuthority, options?: SubagentCloseOptions): Promise<SubagentCloseResult> {
+    const manager = this.continuations
+    if (manager === undefined) {
+      const requestId = SubagentControlRequestId(randomUUID())
+      return { requestId, agentId: childId, accepted: true, noOp: true, previousState: 'completed', closedAgentIds: [] }
+    }
+    return manager.close(childId, authority, options)
+  }
+
+  /** Query one authorized child status snapshot. */
+  async status(parent: Agent, childId: SessionId): Promise<SubagentStatusSnapshot> {
+    return this.requireContinuations().status(parent, childId)
+  }
+
   /**
    * Interrupt one live continuable child's current turn under a human parent
    * address or an exact live ancestor Agent. Fire-and-return: the cancel
@@ -252,8 +294,10 @@ export class SubagentRuntime extends Service {
    * @throws {SubagentError} `UNAUTHORIZED` when the authority does not own the
    *   live target.
    */
-  interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void {
-    this.continuations?.interrupt(targetSessionId, authority)
+  interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): SubagentControlResult {
+    const manager = this.continuations
+    if (manager === undefined) return { requestId: SubagentControlRequestId(randomUUID()), agentId: targetSessionId, accepted: true }
+    return manager.interrupt(targetSessionId, authority)
   }
 
   /**

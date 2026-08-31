@@ -712,6 +712,12 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/subagent/subagent/src/descriptor.ts:37`](../packages/subagent/subagent/src/descriptor.ts)
 
+#### `subagent/message-accepted`、`subagent/steer-accepted`、`subagent/interrupt-requested`、`subagent/closed`、`subagent/progress` — 仅日志
+
+这些事件记录父子控制请求的接收、打断、关闭完成和进度投影；均带可忽略信封字段，消息正文仍由 inbox 事件持久化。
+
+来源：[`packages/subagent/subagent/src/descriptor.ts:50`](../packages/subagent/subagent/src/descriptor.ts)
+
 ### `team/*`
 
 <a id="teammember--log-only"></a>
