@@ -629,18 +629,24 @@ export class SubagentContinuationManager {
     void (async () => {
       try {
         await disposal
-        activation.handle.agent.session.append('subagent/closed', {
-          eventSeq: ++this.controlSequence,
-          occurredAt: Date.now(),
-          agentId: childId,
-          parentSessionId: activation.parentSession,
-          requestId,
-          state: 'closed',
-          closedAgentIds,
-          ignorable: true,
-        })
-        const sessions = this.ctx.get('sessions')
-        if (sessions !== undefined) await sessions.flush(activation.handle.agent.session)
+        const session = activation.handle.agent.session
+        const closedEvent = {
+          type: 'subagent/closed' as const,
+          seq: session.events.length,
+          time: Date.now(),
+          data: {
+            eventSeq: ++this.controlSequence,
+            occurredAt: Date.now(),
+            agentId: childId,
+            parentSessionId: activation.parentSession,
+            requestId,
+            state: 'closed',
+            closedAgentIds,
+            ignorable: true as const,
+          },
+          ignorable: true as const,
+        }
+        await this.requirePersistence().append(childId, [closedEvent])
         completion.resolve({ requestId, agentId: childId, accepted: true, noOp: false, previousState, closedAgentIds })
       } catch (error: unknown) {
         completion.reject(error)
