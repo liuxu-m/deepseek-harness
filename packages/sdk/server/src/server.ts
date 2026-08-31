@@ -78,8 +78,11 @@ export class HarnessSdkJsonRpcServer {
         this.transport.notify('subagent.progress', { sessionId: String(session.id), ...event.data })
       } else if (event.type === 'subagent/message-accepted' || event.type === 'subagent/steer-accepted'
         || event.type === 'subagent/interrupt-requested' || event.type === 'subagent/closed') {
+        const action = event.type === 'subagent/message-accepted' ? 'queue'
+          : event.type === 'subagent/steer-accepted' ? 'steer'
+            : event.type === 'subagent/interrupt-requested' ? 'interrupt' : 'close'
         this.transport.notify('subagent.control', { sessionId: String(session.id), ...event.data,
-          action: event.type.replace('subagent/', '').replace('-accepted', '').replace('-requested', '') })
+          action })
       }
     }))
     this.disposers.push(ctx.on('agent/status', ({ agent, status }) => {
