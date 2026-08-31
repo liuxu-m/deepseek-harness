@@ -2692,8 +2692,10 @@ describe('SubagentRuntime.interrupt', () => {
 describe('SubagentRuntime.close persistence', () => {
   it('persists closed event after handle disposal with continuous sequence', async () => {
     const hold = Promise.withResolvers<undefined>()
-    const { ctx, parent } = await setupWith(new GatedAdapter([{ chunks: textResponse('done'), gate: hold.promise }]))
+    const adapter = new GatedAdapter([{ chunks: textResponse('done'), gate: hold.promise }])
+    const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startContinuable(startSpec(parent))
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const resultPromise = ctx.subagents.close(started.childId, { kind: 'direct-parent', agent: parent })
     hold.resolve(undefined)
     const result = await resultPromise
@@ -2701,7 +2703,7 @@ describe('SubagentRuntime.close persistence', () => {
     const loaded = await ctx.sessionPersistence.load(started.childId)
     const closed = loaded.events.filter(event => event.type === 'subagent/closed')
     expect(closed).toHaveLength(1)
-    expect(closed[0]?.seq).toBe(loaded.events.length - 1)
+    expect(loaded.events.map(event => event.seq)).toEqual(loaded.events.map((_event, index) => index))
     expect(closed[0]?.type).toBe('subagent/closed')
   })
 })
