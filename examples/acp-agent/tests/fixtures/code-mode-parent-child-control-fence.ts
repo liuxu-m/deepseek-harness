@@ -21,9 +21,7 @@ export function apply(ctx: Context): void {
       }
     })
     const disposeStep = ctx.root.on('agent/pre-step', async ({ turn, step }, next) => {
-      if (parentStopped && turn === 1 && step > 1) {
-        await Promise.race([release.promise, Promise.resolve()])
-      }
+      if (parentStopped && turn === 1 && step > 1) await release.promise
       return next()
     })
     return () => {

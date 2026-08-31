@@ -615,9 +615,10 @@ const SCENARIOS: Scenario[] = [
   { name: 'code-mode-turn', hasModelTurn: true, recorded: true, pinsHeader: true, headerClass: 'code', configPath: CODE_MODE_CONFIG },
   {
     name: 'code-mode-parent-child-control',
-    hasModelTurn: false,
+    hasModelTurn: true,
     recorded: false,
-    comparesLog: false,
+    pinsHeader: true,
+    headerClass: 'code-parent-child-control',
     configPath: CODE_MODE_PARENT_CHILD_CONTROL_CONFIG,
   },
   {
