@@ -92,8 +92,8 @@ export class HarnessSdkJsonRpcServer {
             : ''
           this.transport.notify('subagent.report', {
             sessionId: String(session.id), eventSeq: event.seq, occurredAt: event.time,
-            agentId: String(source.kind === 'subagent-report' && 'childId' in source
-              ? (source as { childId?: unknown }).childId ?? session.id : session.id),
+            agentId: String('senderSessionId' in source
+              ? (source as { senderSessionId?: unknown }).senderSessionId ?? session.id : session.id),
             parentSessionId: String(session.id), report,
           })
         }
