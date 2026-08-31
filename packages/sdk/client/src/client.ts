@@ -310,7 +310,9 @@ export class HarnessClient {
       throw new SdkProtocolError(`subagent/status returned malformed result: ${JSON.stringify(result)}`)
     }
     this.subagentStatusCache.set(params.agentId, {
-      eventSeq: Number.MAX_SAFE_INTEGER,
+      // A status query is a point-in-time baseline. Keep it below streamed
+      // event sequence numbers so later notifications can advance the cache.
+      eventSeq: -1,
       occurredAt: typeof result.lastActivityAt === 'number' ? result.lastActivityAt : 0,
       status: result,
     })

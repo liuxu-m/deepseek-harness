@@ -326,7 +326,7 @@ function CatalogRows({
           .filter(value => value !== undefined)
           .join(' · ')
         const ControlMenu = (): ReactElement | null => {
-          if (controlSubagent === undefined) return null
+          if (controlSubagent === undefined || entry.mode === 'one-shot') return null
           const [confirmation, setConfirmation] = useState<string>()
           const send = (action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close'): void => {
             void controlSubagent(parentSessionId, entry.id, action).then((result: unknown) => {
@@ -356,7 +356,7 @@ function CatalogRows({
                 const value = (result as { ok: boolean; value?: unknown }).value
                 if (typeof value === 'object' && value !== null) setStatus(value as Record<string, unknown>)
               }
-            })
+            }, () => { setStatus({ state: 'unavailable' }) })
           }, [])
           if (status === undefined) return null
           const fields = [status.state, status.phase, status.lastReport,
