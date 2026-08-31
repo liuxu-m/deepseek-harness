@@ -542,7 +542,13 @@ export class SubagentContinuationManager {
     }
   }
 
-  /** Queue a message without waking the child's driver. */
+  /** Queue a message without waking the child's driver.
+   * @param parent - exact live direct parent.
+   * @param childId - durable child id.
+   * @param content - user-role content.
+   * @param options - source and cancellation options.
+   * @returns acceptance receipt.
+   */
   async queue(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentQueueOptions): Promise<SubagentControlResult> {
     this.assertAdmitting(parent)
     if (this.closeResults.has(childId)) throw new SubagentError(`subagent "${childId}" is closed`, 'ACTIVATION_CLOSING')
@@ -564,7 +570,13 @@ export class SubagentContinuationManager {
     return { requestId, agentId: childId, accepted: true, messageId }
   }
 
-  /** Queue steering content for the next safe step. */
+  /** Queue steering content for the next safe step.
+   * @param parent - exact live direct parent.
+   * @param childId - durable child id.
+   * @param content - steering content.
+   * @param options - source and cancellation options.
+   * @returns acceptance receipt.
+   */
   async steer(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentSteerOptions): Promise<SubagentControlResult> {
     this.assertAdmitting(parent)
     if (this.closeResults.has(childId)) return { requestId: SubagentControlRequestId(randomUUID()), agentId: childId, accepted: false }
@@ -584,7 +596,12 @@ export class SubagentContinuationManager {
     return { requestId, agentId: childId, accepted: messageId !== undefined, effectiveStep: 'next-step', ...(messageId === undefined ? {} : { messageId }) }
   }
 
-  /** Close one continuable child and descendants, sharing its disposal transaction. */
+  /** Close one continuable child and descendants, sharing its disposal transaction.
+   * @param childId - durable child id.
+   * @param authority - direct-parent or ancestor authority.
+   * @param options - cascade policy.
+   * @returns completed close receipt.
+   */
   async close(childId: SessionId, authority: SubagentCloseAuthority, options: SubagentCloseOptions = {}): Promise<SubagentCloseResult> {
     return this.locks.run(childId, () => this.closeUnlocked(childId, authority, options))
   }
@@ -665,7 +682,11 @@ export class SubagentContinuationManager {
     if (caller.id === childId) throw new SubagentError('an agent cannot close itself', 'UNAUTHORIZED')
   }
 
-  /** Return a service-generated status snapshot for one authorized child. */
+  /** Return a service-generated status snapshot for one authorized child.
+   * @param parent - exact live ancestor.
+   * @param childId - durable child id.
+   * @returns current status snapshot.
+   */
   async status(parent: Agent, childId: SessionId): Promise<SubagentStatusSnapshot> {
     const activation = this.activations.get(childId)
     if (activation === undefined) {
@@ -777,6 +798,7 @@ export class SubagentContinuationManager {
    * already open is likewise an accepted no-op after authorization.
    * @param targetSessionId - the durable child session id to interrupt.
    * @param authority - the human parent address or exact live ancestor Agent.
+   * @returns acceptance receipt with the target's previous state.
    * @throws {SubagentError} `UNAUTHORIZED` when the presented authority does
    *   not own the live target: a stale or self-targeting ancestor caller, a
    *   parent address that is not the live target's durable direct parent, or
@@ -833,7 +855,7 @@ export class SubagentContinuationManager {
       state: 'interrupted',
       ignorable: true,
     })
-    this.appendProgressEvent(activation, 'running')
+    this.appendProgressEvent(activation, 'interrupted')
     return { requestId, agentId: targetSessionId, accepted: true, previousState }
   }
 
@@ -1196,7 +1218,7 @@ export class SubagentContinuationManager {
   }
 
   /** Append the replayable state projection after an accepted control edge. */
-  private appendProgressEvent(activation: Activation, state = this.stateOf(activation)): void {
+  private appendProgressEvent(activation: Activation, state: ActivationState | 'interrupted' = this.stateOf(activation)): void {
     const agent = activation.handle.agent
     agent.session.append('subagent/progress', {
       eventSeq: this.nextControlSequence(activation),

@@ -22,7 +22,10 @@ export type SubagentMessageMode = 'queue' | 'followup' | 'steer'
 /** Opaque identity for one parent control request. */
 export type SubagentControlRequestId = Branded<'SubagentControlRequestId'>
 
-/** Brand a raw control request id. */
+/** Brand a raw control request id.
+ * @param id - raw request id.
+ * @returns branded request id.
+ */
 export function SubagentControlRequestId(id: string): SubagentControlRequestId {
   return id as SubagentControlRequestId
 }

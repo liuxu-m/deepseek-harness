@@ -10,7 +10,7 @@
 
 作用域局部注册有意不受子级全局 `toolFilter` 影响，因此委派允许列表无法移除唯一的返回通道。需要子级不具备返回通道的部署应省略本包。
 
-贡献体以 `installReportTool(childCtx, ctx, delivery)` 导出，以便检查类消费方把 `report` 及其指引安装到新创建的子级作用域中，并返回同时撤销两者的唯一 disposer。全局注册表无法公开作用域局部 schema，因此生成的工具目录会使用这条路径。生产组合仍通过 `apply()` 进入；subagent seam 的贡献注册表保持私有。
+贡献体以 `installReportTool(childCtx, ctx, delivery, maxReportBytes)` 导出，以便检查类消费方把 `report` 及其指引安装到新创建的子级作用域中；默认 UTF-8 上限为 16,384 字节，并返回同时撤销两者的唯一 disposer。全局注册表无法公开作用域局部 schema，因此生成的工具目录会使用这条路径。生产组合仍通过 `apply()` 进入；subagent seam 的贡献注册表保持私有。
 
 ## 模型体验
 
@@ -50,7 +50,7 @@
 
 #### Token 影响
 
-子级的完整 `output` 加上一行前缀；本包不设上限。
+子级的完整 `output` 加上一行前缀；内容受配置的 `maxReportBytes` UTF-8 字节上限约束。
 
 #### KV Cache 影响
 

@@ -49,6 +49,7 @@ export const Config: z<Config> = z.object({
  * @param childCtx - child-scoped context receiving the tool and the guidance.
  * @param ctx - service context used for delivery.
  * @param delivery - resolved deployment scheduling policy.
+ * @param maxReportBytes - maximum UTF-8 byte length accepted for one report.
  * @returns disposer that attempts both child registrations before reporting cleanup failures.
  */
 export function installReportTool(

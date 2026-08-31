@@ -10,7 +10,7 @@ The child-scoped `tool:report` prompt section instructs the child to call `repor
 
 Scope-local registration deliberately survives the child's global `toolFilter`, so a delegation allow-list cannot remove the only return channel. A deployment that requires a child with no return channel omits this package.
 
-The contribution body is exported as `installReportTool(childCtx, ctx, delivery)` so inspection consumers can install `report` and its guidance into a minted child scope, and returns the one disposer revoking both. The generated tool catalog uses that path because the global registry cannot expose a scope-local schema. Production composition still enters through `apply()`; the subagent seam's contribution registry remains private.
+The contribution body is exported as `installReportTool(childCtx, ctx, delivery, maxReportBytes)` so inspection consumers can install `report` and its guidance into a minted child scope, with a default UTF-8 limit of 16,384 bytes, and returns the one disposer revoking both. The generated tool catalog uses that path because the global registry cannot expose a scope-local schema. Production composition still enters through `apply()`; the subagent seam's contribution registry remains private.
 
 ## Model Experience
 
@@ -50,7 +50,7 @@ One user-role parent message framed as `Background subagent <child-id> reported:
 
 #### Token effect
 
-The child's complete `output` plus the one-line frame, uncapped by this package.
+The child's complete `output` plus the one-line frame, limited by the configured `maxReportBytes` UTF-8 budget.
 
 #### KV Cache effect
 
