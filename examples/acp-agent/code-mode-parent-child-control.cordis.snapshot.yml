@@ -1,0 +1,8 @@
+# Keyless replay composition for parent/child control.
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./code-mode.cordis.snapshot.yml
+
+- id: parent-child-control-fence
+  name: './tests/fixtures/code-mode-parent-child-control-fence.ts'

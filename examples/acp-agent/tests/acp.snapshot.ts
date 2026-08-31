@@ -85,6 +85,7 @@ const PRODUCT_SUBAGENT_RESULT_DIAGNOSTIC_CONFIG = fileURLToPath(
   new URL('../subagent-result-diagnostic.cordis.yml', import.meta.url),
 )
 const FS_DIFF_BOUND_CONFIG = fileURLToPath(new URL('./fs-diff-bound.cordis.yml', import.meta.url))
+const CODE_MODE_PARENT_CHILD_CONTROL_CONFIG = fileURLToPath(new URL('../code-mode-parent-child-control.cordis.yml', import.meta.url))
 const SNAPSHOTS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'snapshots')
 const PACKED_CHUNKS_SOURCE = 'hook-cc-pretool-deny'
 
@@ -612,6 +613,13 @@ const SCENARIOS: Scenario[] = [
   // tools:sdk section rides in the prompt, and the program's tool calls land as
   // tool/code-dispatch events. Each overlay composes and pins its own header class.
   { name: 'code-mode-turn', hasModelTurn: true, recorded: true, pinsHeader: true, headerClass: 'code', configPath: CODE_MODE_CONFIG },
+  {
+    name: 'code-mode-parent-child-control',
+    hasModelTurn: false,
+    recorded: false,
+    comparesLog: false,
+    configPath: CODE_MODE_PARENT_CHILD_CONTROL_CONFIG,
+  },
   {
     name: 'code-mode-read-image',
     hasModelTurn: true,
