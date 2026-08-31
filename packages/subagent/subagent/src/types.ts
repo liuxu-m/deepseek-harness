@@ -86,6 +86,8 @@ export interface SubagentStatusSnapshot {
   readonly lastReport?: string
   readonly pendingMessageCount: number
   readonly stopReason?: string
+  /** Safe diagnostic when a persisted status cannot be reconstructed. */
+  readonly diagnostic?: string
 }
 
 /** Identifies one accepted subagent run across its lifecycle event pair. */

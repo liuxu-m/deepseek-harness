@@ -232,6 +232,54 @@ describe('dsh-tool-subagent-report', () => {
     expect(adapter.requests.filter(request => request.sessionId === parent.id)).toHaveLength(parentRequests)
   })
 
+  it('records an ignorable progress event and projects the latest report into status', async () => {
+    const { ctx, parent } = await setup()
+    const { started, child } = await startChild(ctx, parent)
+
+    expect((await callReport(ctx, child, 'MILESTONE_COMPLETE')).isError).toBe(false)
+
+    const progress = child.session.events.findLast(event => event.type === 'subagent/progress')
+    expect(progress).toMatchObject({
+      data: {
+        agentId: started.childId,
+        parentSessionId: parent.id,
+        pendingMessageCount: 0,
+        ignorable: true,
+      },
+    })
+    if (progress?.type !== 'subagent/progress') throw new Error('progress event was not recorded')
+    expect(progress.data.eventSeq).toBeGreaterThan(0)
+    expect(progress.data.occurredAt).toBeGreaterThan(0)
+    expect(await ctx.subagents.status(parent, started.childId)).toMatchObject({
+      state: 'running',
+      lastReport: 'MILESTONE_COMPLETE',
+    })
+  })
+
+  it('rejects reports exceeding the configured UTF-8 byte limit', async () => {
+    const { ctx, parent } = await setup({
+      config: { reportDelivery: 'quiet', maxReportBytes: 5 } as tool.Config,
+    })
+    const { child } = await startChild(ctx, parent)
+
+    expect((await callReport(ctx, child, '你好')).isError).toBe(true)
+    expect(reports(parent)).toEqual([])
+  })
+
+  it('replays completed status and the latest report after the child activation settles', async () => {
+    const { ctx, parent, adapter } = await setup()
+    const { started, child } = await startChild(ctx, parent)
+    expect((await callReport(ctx, child, 'PERSISTED_REPORT')).isError).toBe(false)
+    adapter.release(started.childId)
+    await vi.waitFor(() => { expect(ctx.agents.get(started.childId)).toBeUndefined() })
+
+    await expect(ctx.subagents.status(parent, started.childId)).resolves.toMatchObject({
+      agentId: started.childId,
+      state: 'completed',
+      lastReport: 'PERSISTED_REPORT',
+    })
+  })
+
   it('delivers next-step reports through waking steering', async () => {
     const { ctx, parent, adapter } = await setup({ config: { reportDelivery: 'next-step' } })
     const { child } = await startChild(ctx, parent)

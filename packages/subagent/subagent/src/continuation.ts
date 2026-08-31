@@ -639,7 +639,7 @@ export class SubagentContinuationManager {
           seq: session.events.length,
           time: Date.now(),
           data: {
-            eventSeq: ++this.controlSequence,
+            eventSeq: this.nextControlSequence(activation),
             occurredAt: Date.now(),
             agentId: childId,
             parentSessionId: activation.parentSession,
@@ -682,12 +682,48 @@ export class SubagentContinuationManager {
         lineageParent = ancestor.meta.parentSession
       }
       const closed = loaded.events.findLast(event => event.type === 'subagent/closed')
+      const progress = loaded.events.findLast(event => event.type === 'subagent/progress')
+      const interrupted = loaded.events.findLast(event => event.type === 'subagent/interrupt-requested')
       const lastEvent = loaded.events.at(-1)
+      let descriptor: SubagentDescriptorData | undefined
+      try {
+        descriptor = foldSubagentDescriptor(loaded.events.slice(loaded.meta.seedLength ?? 0))
+      } catch {
+        return {
+          agentId: childId,
+          parentSessionId,
+          state: 'failed',
+          pendingMessageCount: 0,
+          diagnostic: 'subagent descriptor could not be reconstructed',
+          ...(lastEvent === undefined ? {} : { lastActivityAt: lastEvent.time }),
+        }
+      }
+      if (descriptor === undefined) {
+        return {
+          agentId: childId,
+          parentSessionId,
+          state: 'failed',
+          pendingMessageCount: 0,
+          diagnostic: 'subagent descriptor is unavailable',
+          ...(lastEvent === undefined ? {} : { lastActivityAt: lastEvent.time }),
+        }
+      }
+      const report = this.lastReport(parent, childId)
+      const state: SubagentStatusSnapshot['state'] = closed !== undefined
+        ? 'closed'
+        : interrupted !== undefined && (progress === undefined || interrupted.time >= progress.time)
+          ? 'interrupted'
+          : progress?.type === 'subagent/progress' && progress.data.state === 'running'
+            ? 'running'
+            : progress?.type === 'subagent/progress' && progress.data.state === 'waiting'
+              ? 'ready'
+              : 'completed'
       return {
         agentId: childId,
         parentSessionId,
-        state: closed === undefined ? 'completed' : 'closed',
-        pendingMessageCount: 0,
+        state,
+        pendingMessageCount: progress?.type === 'subagent/progress' ? progress.data.pendingMessageCount : 0,
+        ...report === undefined ? {} : { lastReport: report },
         ...(lastEvent === undefined ? {} : { lastActivityAt: lastEvent.time }),
       }
     }
@@ -695,12 +731,14 @@ export class SubagentContinuationManager {
     const state = this.stateOf(activation)
     const pendingMessageCount = activation.handle.agent.inbox.nextTurn.length + activation.handle.agent.inbox.nextStep.length
     const projectedState = state === 'settled' ? 'completed' : state === 'waiting' ? (pendingMessageCount > 0 ? 'ready' : 'idle') : 'running'
+    const report = this.lastReport(parent, childId)
     return {
       agentId: childId,
       parentSessionId: activation.parentSession,
       state: projectedState,
       pendingMessageCount,
       lastActivityAt: activation.handle.agent.session.events.at(-1)?.time ?? 0,
+      ...report === undefined ? {} : { lastReport: report },
     }
   }
 
@@ -711,7 +749,7 @@ export class SubagentContinuationManager {
     messageId: MessageId,
   ): void {
     activation.handle.agent.session.append(type, {
-      eventSeq: ++this.controlSequence,
+      eventSeq: this.nextControlSequence(activation),
       occurredAt: Date.now(),
       agentId: activation.childId,
       parentSessionId: activation.parentSession,
@@ -720,6 +758,7 @@ export class SubagentContinuationManager {
       state: this.stateOf(activation),
       ignorable: true,
     })
+    this.appendProgressEvent(activation)
   }
 
   /**
@@ -786,7 +825,7 @@ export class SubagentContinuationManager {
       { keepInbox: true },
     )
     activation.handle.agent.session.append('subagent/interrupt-requested', {
-      eventSeq: ++this.controlSequence,
+      eventSeq: this.nextControlSequence(activation),
       occurredAt: Date.now(),
       agentId: targetSessionId,
       parentSessionId: activation.parentSession,
@@ -794,6 +833,7 @@ export class SubagentContinuationManager {
       state: 'interrupted',
       ignorable: true,
     })
+    this.appendProgressEvent(activation, 'running')
     return { requestId, agentId: targetSessionId, accepted: true, previousState }
   }
 
@@ -819,7 +859,9 @@ export class SubagentContinuationManager {
     this.assertAdmitting(child)
     const activation = this.authorizeReporter(child)
     const parent = this.resolveReportParent(child)
-    return this.deliverReport(activation, parent, content, options.delivery)
+    const messageId = this.deliverReport(activation, parent, content, options.delivery)
+    this.appendProgressEvent(activation)
+    return messageId
   }
 
   /** Authorize only the exact Agent of one resident Activation. */
@@ -1138,6 +1180,48 @@ export class SubagentContinuationManager {
     if (activation.handle.agent.inbox.hasPending) return 'waiting'
     if (activation.ownedChildren.size > 0) return 'waiting'
     return 'settled'
+  }
+
+  /** Allocate a per-child monotonic sequence for log-only control events. */
+  private nextControlSequence(activation: Activation): number {
+    const persisted = activation.handle.agent.session.events.reduce((max, event) => {
+      if (!('data' in event) || typeof event.data !== 'object' || event.data === null) return max
+      const sequence = (event.data as { eventSeq?: unknown }).eventSeq
+      return typeof sequence === 'number' && Number.isSafeInteger(sequence)
+        ? Math.max(max, sequence)
+        : max
+    }, this.controlSequence)
+    this.controlSequence = persisted + 1
+    return this.controlSequence
+  }
+
+  /** Append the replayable state projection after an accepted control edge. */
+  private appendProgressEvent(activation: Activation, state = this.stateOf(activation)): void {
+    const agent = activation.handle.agent
+    agent.session.append('subagent/progress', {
+      eventSeq: this.nextControlSequence(activation),
+      occurredAt: Date.now(),
+      agentId: activation.childId,
+      parentSessionId: activation.parentSession,
+      state,
+      pendingMessageCount: agent.inbox.nextTurn.length + agent.inbox.nextStep.length,
+      ignorable: true,
+    })
+  }
+
+  /** Recover the latest safe report text from a parent's durable user messages. */
+  private lastReport(parent: Agent, childId: SessionId): string | undefined {
+    const messages = [
+      ...parent.session.events.flatMap(event => event.type === 'user/message' ? [event.data] : []),
+      ...parent.inbox.nextTurn,
+      ...parent.inbox.nextStep,
+    ]
+    const message = messages.findLast(item => item.source.kind === 'subagent-report'
+      && item.source.senderSessionId === childId)
+    if (message === undefined) return undefined
+    const text = message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+    const prefix = `Background subagent ${childId} reported:\n`
+    return text.startsWith(prefix) ? text.slice(prefix.length) : text
   }
 
   /**
@@ -1608,6 +1692,7 @@ export class SubagentContinuationManager {
       // Quiesce before the flush: a turn still running would keep
       // appending events the flush cannot cover.
       await idle
+      this.appendProgressEvent(activation, 'settled')
       await this.flushFinalState(activation)
       // Capture the child-dependent edge data while the child is still live:
       // handle disposal unregisters it, and consumers read its log and scope.

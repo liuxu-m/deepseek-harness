@@ -38,6 +38,12 @@ interface SubagentControlEvent {
   readonly ignorable: true
 }
 
+/** Durable, log-only projection of one child's current lifecycle state. */
+export interface SubagentProgressEvent extends Omit<SubagentControlEvent, 'requestId' | 'messageId' | 'state'> {
+  readonly state: string
+  readonly pendingMessageCount: number
+}
+
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**
