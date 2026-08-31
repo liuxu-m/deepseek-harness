@@ -154,7 +154,8 @@ export class HarnessSdkJsonRpcServer {
 
   /** Execute one parent-authorized child control operation. */
   async control(params: SubagentControlParams): Promise<SubagentControlResultWire> {
-    const parent = await this.getOrCreateSession(params.parentSessionId)
+    const parent = this.sessions.get(params.parentSessionId)
+    if (parent === undefined) throw new Error(`parent session is not open: ${params.parentSessionId}`)
     if (this.ctx.agents.get(parent.handle.agent.id) !== parent.handle.agent) {
       throw new Error(`session agent was disposed outside the server: ${params.parentSessionId}`)
     }
@@ -178,7 +179,8 @@ export class HarnessSdkJsonRpcServer {
 
   /** Read one parent-authorized child status snapshot. */
   async status(params: SubagentStatusParams): Promise<unknown> {
-    const parent = await this.getOrCreateSession(params.parentSessionId)
+    const parent = this.sessions.get(params.parentSessionId)
+    if (parent === undefined) throw new Error(`parent session is not open: ${params.parentSessionId}`)
     const runtime = this.ctx.get('subagents') as SubagentRuntime | undefined
     if (runtime === undefined) throw new Error('subagent status capability is unavailable')
     return runtime.status(parent.handle.agent, SessionId(params.agentId))
