@@ -317,13 +317,12 @@ describe('dsh-tool-subagent-control', () => {
     }, parent)
 
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`message queued as the next turn for subagent ${started.childId}`)
-    await waitNoActivation(ctx, started.childId)
+    expect(text(result)).toBe(`request accepted for subagent ${started.childId}`)
+    await vi.waitFor(() => { expect(ctx.agents.get(started.childId)).toBeDefined() })
 
-    const loaded = await ctx.sessionPersistence.load(started.childId)
-    const followUp = loaded.events.findLast(event => event.type === 'user/message')
-    // The durable message source records the calling agent without granting authority.
-    expect(followUp?.type === 'user/message' && followUp.data.source).toEqual({
+    const child = ctx.agents.get(started.childId)!
+    const followUp = child.inbox.nextTurn.at(-1)
+    expect(followUp?.source).toEqual({
       kind: 'coordinator',
       form: 'relay',
       senderSessionId: parent.id,
@@ -346,13 +345,10 @@ describe('dsh-tool-subagent-control', () => {
     }, parent)
     expect(result.isError).toBe(false)
 
-    await waitNoActivation(ctx, started.childId)
-    const loaded = await ctx.sessionPersistence.load(started.childId)
-    const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'plugin'
-      ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
-      : [])
-    // A follow-up is its own later turn, never steering inside the first one.
-    expect(prompts).toEqual(['long work', 'also consider Y'])
+    await ctx.agents.get(started.childId)!.whenIdle()
+    const child = ctx.agents.get(started.childId)!
+    expect(child.inbox.nextTurn).toHaveLength(1)
+    expect(child.inbox.nextTurn[0]?.content).toEqual([{ type: 'text', text: 'also consider Y' }])
   })
 
   it('reports a delivery failure as an errored, not-delivered result', async () => {
@@ -459,7 +455,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     expect(adapter.requests).toHaveLength(1)
     expect(child.inbox.nextTurn).toHaveLength(1)
 
-    const waking = await callTool(ctx, 'send_message', {
+    const waking = await callTool(ctx, 'followup_task', {
       subagent_id: started.childId,
       message: 'wake up',
     }, parent)
@@ -576,5 +572,89 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     const result = await callTool(ctx, 'interrupt_agent', { agent_id: 'x' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
+  })
+})
+
+describe('dsh-tool-subagent-control parent controls', () => {
+  it('registers the six parent control tools with stable parameters', async () => {
+    const { ctx } = await setup([])
+    const schemas = ctx.tools.schemas()
+    expect(schemas.map(schema => schema.name).filter(name => [
+      'send_message', 'followup_task', 'steer_agent', 'interrupt_agent', 'close_agent', 'get_agent_status',
+    ].includes(name))).toEqual([
+      'send_message', 'followup_task', 'steer_agent', 'interrupt_agent', 'close_agent', 'get_agent_status',
+    ])
+    const properties = (name: string) => {
+      const schema = schemas.find(item => item.name === name)
+      return Object.keys((schema?.parameters as { properties?: Record<string, unknown> }).properties ?? {}).sort()
+    }
+    expect(properties('send_message')).toEqual(['message', 'subagent_id'])
+    expect(properties('followup_task')).toEqual(['message', 'subagent_id'])
+    expect(properties('steer_agent')).toEqual(['agent_id', 'message'])
+    expect(properties('interrupt_agent')).toEqual(['agent_id'])
+    expect(properties('close_agent')).toEqual(['agent_id', 'cascade'])
+    expect(properties('get_agent_status')).toEqual(['agent_id'])
+  })
+
+  it('returns structured receipts for followup, steer, close, and status', async () => {
+    const { ctx, parent } = await setup([textResponse('first'), textResponse('second')])
+    const started = await ctx.subagents.startContinuable({
+      provider: 'spawn', label: 'child', request: { prompt: [{ type: 'text', text: 'child' }], parent }, signal: testToolSignal,
+    })
+    await waitNoActivation(ctx, started.childId)
+
+    const followup = await callTool(ctx, 'followup_task', { subagent_id: started.childId, message: 'next' }, parent)
+    expect(followup.isError).toBe(false)
+    expect(followup.value).toMatchObject({ accepted: true, agentId: started.childId })
+
+    const status = await callTool(ctx, 'get_agent_status', { agent_id: started.childId }, parent)
+    expect(status.isError).toBe(false)
+    expect(status.value).toMatchObject({ agentId: started.childId, state: 'running' })
+
+    const steer = await callTool(ctx, 'steer_agent', { agent_id: started.childId, message: 'urgent' }, parent)
+    expect(steer.isError).toBe(false)
+    expect(steer.value).toMatchObject({ accepted: true, agentId: started.childId })
+
+    const close = await callTool(ctx, 'close_agent', { agent_id: started.childId }, parent)
+    expect(close.isError).toBe(false)
+    expect(close.value).toMatchObject({ accepted: true, agentId: started.childId })
+  })
+
+  it.each(['followup_task', 'steer_agent', 'close_agent', 'get_agent_status'])('rejects unknown target for %s', async (name) => {
+    const { ctx, parent } = await setup([])
+    const args = name === 'get_agent_status'
+      ? { agent_id: 'unknown' }
+      : name === 'close_agent'
+        ? { agent_id: 'unknown' }
+        : name === 'steer_agent'
+          ? { agent_id: 'unknown', message: 'hello' }
+          : { subagent_id: 'unknown', message: 'hello' }
+    const result = await callTool(ctx, name, args, parent)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toMatch(/unavailable|not active|not found|unknown/i)
+  })
+
+  it.each(['send_message', 'followup_task', 'steer_agent', 'interrupt_agent', 'close_agent', 'get_agent_status'])('requires a calling agent for %s', async (name) => {
+    const { ctx } = await setup([])
+    const args = name === 'send_message' || name === 'followup_task'
+      ? { subagent_id: 'unknown', message: 'hello' }
+      : name === 'close_agent' || name === 'get_agent_status' || name === 'interrupt_agent'
+        ? { agent_id: 'unknown' }
+        : { agent_id: 'unknown', message: 'hello' }
+    const result = await callTool(ctx, name, args)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('requires a calling agent')
+  })
+
+  it('rejects steering the root agent and defaults close cascade to true', async () => {
+    const { ctx, parent } = await setup([])
+    const steer = await callTool(ctx, 'steer_agent', { agent_id: parent.id, message: 'no' }, parent)
+    expect(steer.isError).toBe(true)
+    expect(text(steer)).toMatch(/root|descendant|itself|unauthorized/i)
+
+    const closeTool = ctx.tools.get('close_agent')
+    expect(closeTool?.parameters).toBeDefined()
+    const cascade = ((closeTool?.parameters as { properties?: Record<string, { default?: unknown }> }).properties ?? {}).cascade
+    expect(cascade?.default).toBe(true)
   })
 })

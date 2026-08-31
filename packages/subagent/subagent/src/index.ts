@@ -250,7 +250,7 @@ export class SubagentRuntime extends Service {
     childId: SessionId,
     content: ContentBlock[],
     options: SubagentFollowupOptions,
-  ): Promise<MessageId> {
+  ): Promise<SubagentControlResult> {
     return this.requireContinuations().followup(parent, childId, content, options)
   }
 

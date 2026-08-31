@@ -514,9 +514,10 @@ export class SubagentContinuationManager {
     childId: SessionId,
     content: ContentBlock[],
     options: SubagentFollowupOptions,
-  ): Promise<MessageId> {
+  ): Promise<SubagentControlResult> {
     this.assertAdmitting(parent)
     if (this.closeResults.has(childId)) throw new SubagentError(`subagent "${childId}" is closed`, 'ACTIVATION_CLOSING')
+    const requestId = SubagentControlRequestId(randomUUID())
     while (true) {
       const live = await this.locks.run(childId, async () => {
         const activation = this.activations.get(childId)
@@ -534,7 +535,7 @@ export class SubagentContinuationManager {
       })
       /* v8 ignore start -- only the lost-cutoff arm above returns undefined, so only that
        * race reaches the retry below, which then cold-resumes a new Activation. */
-      if (live !== undefined) return live
+      if (live !== undefined) return { requestId, agentId: childId, accepted: true, messageId: live }
       this.assertAdmitting(parent)
       options.signal.throwIfAborted()
       /* v8 ignore stop */
@@ -570,7 +571,7 @@ export class SubagentContinuationManager {
     const requestId = SubagentControlRequestId(randomUUID())
     const messageId = await this.locks.run(childId, async () => {
       const activation = this.activations.get(childId)
-      if (activation === undefined) return undefined
+      if (activation === undefined) throw new SubagentError(`subagent "${childId}" is not active`, 'NOT_FOUND')
       if (activation.disposal !== undefined) return undefined
       this.authorizeLineage(parent, childId, activation.handle.agent.session.header.parentSession)
       options.signal.throwIfAborted()
@@ -602,15 +603,12 @@ export class SubagentContinuationManager {
     const requestId = SubagentControlRequestId(randomUUID())
     const activation = this.activations.get(childId)
     if (activation === undefined) {
-      this.closeOwners.set(childId, authority.agent)
-      const result = Promise.resolve({ requestId, agentId: childId, accepted: true, noOp: true, previousState: 'completed', closedAgentIds: [] })
-      this.closeResults.set(childId, result)
-      return result
+      throw new SubagentError(`subagent "${childId}" is not active`, 'NOT_FOUND')
     }
     const caller = authority.agent
     const direct = activation.parentSession === caller.id
     if (authority.kind === 'direct-parent' && !direct) throw new SubagentError('close requires the direct parent', 'UNAUTHORIZED')
-    if (authority.kind === 'ancestor' && !activation.ancestry.has(caller)) throw new SubagentError('close target is not a descendant', 'UNAUTHORIZED')
+    if (authority.kind === 'ancestor' && !direct && !activation.ancestry.has(caller)) throw new SubagentError('close target is not a descendant', 'UNAUTHORIZED')
     if (!direct && options.cascade === false) throw new SubagentError('ancestor close requires cascade', 'UNAUTHORIZED')
     this.closeOwners.set(childId, caller)
     const previousState = this.stateOf(activation)

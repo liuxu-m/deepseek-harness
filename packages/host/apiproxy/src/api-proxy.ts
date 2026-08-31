@@ -2687,7 +2687,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }, signal)
         if (verified.error !== undefined) return err(request, verified.error)
         try {
-          const messageId = await ctx.subagents.followup(parent, childSessionId, content, {
+          const receipt = await ctx.subagents.followup(parent, childSessionId, content, {
             source: {
               kind: 'user',
               rpcId: request.rpcId,
@@ -2695,7 +2695,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             },
             signal,
           })
-          return ok(request, { messageId })
+          if (!receipt.accepted || receipt.messageId === undefined) {
+            throw new Error(`subagent "${childSessionId}" did not accept the prompt`)
+          }
+          return ok(request, { messageId: receipt.messageId })
         } catch (error: unknown) {
           return subagentPromptError(request, error, signal)
         }

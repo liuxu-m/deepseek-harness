@@ -1785,10 +1785,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when continuation services are unavailable or materialization fails.'],
       },
       {
-        signature: 'async followup( parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions, ): Promise<MessageId>',
+        signature: 'async followup( parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions, ): Promise<SubagentControlResult>',
         description: 'Deliver one later message to a continuable child as its next FIFO turn. A resident child\'s Agent inbox accepts it directly (waking a `waiting` Activation), while an absent one is cold-resumed from its persisted Session. The Agent inbox is the only queue, so every accepted message has one observable order.',
         parameters: [{ name: 'parent', description: 'the exact live direct parent authorizing this delivery.' }, { name: 'childId', description: 'durable child session id.' }, { name: 'content', description: 'user-role content to deliver.' }, { name: 'options', description: 'the message source fields and caller cancellation, which stops the operation only before inbox acceptance.' }],
-        returns: 'the accepted message\'s inbox id.',
+        returns: 'the accepted control request receipt.',
         throws: ['when continuation services are unavailable, parent authority is rejected, or the message was not admitted.'],
       },
       {
