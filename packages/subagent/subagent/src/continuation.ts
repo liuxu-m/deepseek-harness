@@ -376,6 +376,7 @@ export class SubagentContinuationManager {
   private readonly closingScopes = new Map<Agent, Set<Agent>>()
   private draining = false
   private controlSequence = 0
+  private readonly closeResults = new Map<SessionId, Promise<SubagentCloseResult>>()
 
   constructor(
     private readonly ctx: Context,
@@ -554,7 +555,7 @@ export class SubagentContinuationManager {
         this.appendControlEvent(activation, 'subagent/message-accepted', requestId, message.id)
         return message.id
       }
-      return this.coldResume(parent, childId, content, { ...options, source: options.source }, false)
+      return this.coldResume(parent, childId, content, { ...options, source: options.source }, false, requestId)
     })
     return { requestId, agentId: childId, accepted: true, messageId }
   }
@@ -580,11 +581,17 @@ export class SubagentContinuationManager {
 
   /** Close one continuable child and descendants, sharing its disposal transaction. */
   async close(childId: SessionId, authority: SubagentCloseAuthority, options: SubagentCloseOptions = {}): Promise<SubagentCloseResult> {
+    this.validateCloseAuthority(authority, childId)
+    const existingResult = this.closeResults.get(childId)
+    if (existingResult !== undefined) return existingResult
     const requestId = SubagentControlRequestId(randomUUID())
     const activation = this.activations.get(childId)
-    if (activation === undefined) return { requestId, agentId: childId, accepted: true, noOp: true, previousState: 'completed', closedAgentIds: [] }
+    if (activation === undefined) {
+      const result = Promise.resolve({ requestId, agentId: childId, accepted: true, noOp: true, previousState: 'completed', closedAgentIds: [] })
+      this.closeResults.set(childId, result)
+      return result
+    }
     const caller = authority.agent
-    if (this.ctx.agents.get(caller.id) !== caller || caller.id === childId) throw new SubagentError('close requires an exact live parent or ancestor', 'UNAUTHORIZED')
     const direct = activation.parentSession === caller.id
     if (authority.kind === 'direct-parent' && !direct) throw new SubagentError('close requires the direct parent', 'UNAUTHORIZED')
     if (authority.kind === 'ancestor' && !activation.ancestry.has(caller)) throw new SubagentError('close target is not a descendant', 'UNAUTHORIZED')
@@ -599,19 +606,30 @@ export class SubagentContinuationManager {
       }
     }
     collect(activation)
-    const disposal = this.dispose(activation)
-    await disposal
-    activation.handle.agent.session.append('subagent/closed', {
-      eventSeq: ++this.controlSequence,
-      occurredAt: Date.now(),
-      agentId: childId,
-      parentSessionId: activation.parentSession,
-      requestId,
-      state: 'closed',
-      closedAgentIds,
-      ignorable: true,
-    })
-    return { requestId, agentId: childId, accepted: true, noOp: false, previousState, closedAgentIds }
+    const result = (async () => {
+      await this.dispose(activation)
+      activation.handle.agent.session.append('subagent/closed', {
+        eventSeq: ++this.controlSequence,
+        occurredAt: Date.now(),
+        agentId: childId,
+        parentSessionId: activation.parentSession,
+        requestId,
+        state: 'closed',
+        closedAgentIds,
+        ignorable: true,
+      })
+      const sessions = this.ctx.get('sessions')
+      if (sessions !== undefined) await sessions.flush(activation.handle.agent.session)
+      return { requestId, agentId: childId, accepted: true, noOp: false, previousState, closedAgentIds }
+    })()
+    this.closeResults.set(childId, result)
+    return result
+  }
+
+  private validateCloseAuthority(authority: SubagentCloseAuthority, childId: SessionId): void {
+    const caller = authority.agent
+    if (this.ctx.agents.get(caller.id) !== caller) throw new SubagentError('close requires an exact live parent or ancestor', 'UNAUTHORIZED')
+    if (caller.id === childId) throw new SubagentError('an agent cannot close itself', 'UNAUTHORIZED')
   }
 
   /** Return a service-generated status snapshot for one authorized child. */
@@ -1079,6 +1097,7 @@ export class SubagentContinuationManager {
     content: ContentBlock[],
     options: SubagentFollowupOptions,
     wake = true,
+    requestId?: SubagentControlRequestId,
   ): Promise<MessageId> {
     const persistence = this.requirePersistence()
     let loaded: Awaited<ReturnType<typeof persistence.inspect>>
@@ -1127,6 +1146,7 @@ export class SubagentContinuationManager {
     const message = createUserMessage({ content, source: options.source })
     activation.handle.agent.inbox.append('next-turn', message)
     activation.announced = true
+    if (requestId !== undefined) this.appendControlEvent(activation, 'subagent/message-accepted', requestId, message.id)
     return message.id
   }
 

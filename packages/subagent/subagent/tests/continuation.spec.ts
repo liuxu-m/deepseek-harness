@@ -64,6 +64,7 @@ afterEach(async () => {
   if (errors.length > 1) throw new AggregateError(errors, 'temp-root cleanup failed')
 })
 
+
 /** Boot the full continuable stack: loop, persistence, providers, and subagents. */
 async function setupWith(adapter: LlmAdapter, options: { persistence?: boolean } = {}) {
   const ctx = new Context()

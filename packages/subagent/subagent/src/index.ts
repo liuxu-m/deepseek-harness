@@ -254,17 +254,40 @@ export class SubagentRuntime extends Service {
     return this.requireContinuations().followup(parent, childId, content, options)
   }
 
-  /** Queue content without waking the child driver. */
+  /**
+   * Queue content without waking the child driver.
+   * @param parent - exact live direct parent.
+   * @param childId - durable continuable child id.
+   * @param content - user content to enqueue.
+   * @param options - source and cancellation signal.
+   * @returns acceptance receipt.
+   * @throws when authority or admission is rejected.
+   */
   async queue(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentQueueOptions): Promise<SubagentControlResult> {
     return this.requireContinuations().queue(parent, childId, content, options)
   }
 
-  /** Wake a child and deliver content at the next safe step. */
+  /**
+   * Wake a child and deliver content at the next safe step.
+   * @param parent - exact live direct parent.
+   * @param childId - durable child id.
+   * @param content - steering content.
+   * @param options - source and cancellation signal.
+   * @returns acceptance receipt.
+   * @throws when authority or admission is rejected.
+   */
   async steer(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentSteerOptions): Promise<SubagentControlResult> {
     return this.requireContinuations().steer(parent, childId, content, options)
   }
 
-  /** Close one child subtree under explicit authority. */
+  /**
+   * Close one child subtree under explicit authority.
+   * @param childId - durable child id.
+   * @param authority - direct-parent or cascading ancestor authority.
+   * @param options - optional cascade policy.
+   * @returns the shared close result.
+   * @throws when authority is stale or unauthorized.
+   */
   async close(childId: SessionId, authority: SubagentCloseAuthority, options?: SubagentCloseOptions): Promise<SubagentCloseResult> {
     const manager = this.continuations
     if (manager === undefined) {
@@ -274,7 +297,13 @@ export class SubagentRuntime extends Service {
     return manager.close(childId, authority, options)
   }
 
-  /** Query one authorized child status snapshot. */
+  /**
+   * Query one authorized child status snapshot.
+   * @param parent - exact live ancestor.
+   * @param childId - durable child id.
+   * @returns current status snapshot.
+   * @throws when the child is unknown or outside the caller lineage.
+   */
   async status(parent: Agent, childId: SessionId): Promise<SubagentStatusSnapshot> {
     return this.requireContinuations().status(parent, childId)
   }
