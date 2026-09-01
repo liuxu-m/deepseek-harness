@@ -628,8 +628,8 @@ const SCENARIOS: Scenario[] = [
     pinsHeader: true,
     headerClass: 'code-parent-child-control',
     configPath: CODE_MODE_PARENT_CHILD_CONTROL_CONFIG,
-    pinsChildToolSchemas: [1],
-    pinsChildSystemPrompts: [1],
+    pinsChildToolSchemas: [1, 2],
+    pinsChildSystemPrompts: [1, 2],
   },
   {
     name: 'code-mode-read-image',
@@ -722,11 +722,18 @@ it('replays parent code dispatch and child lifecycle controls', () => {
     type?: unknown
     data?: { name?: unknown; state?: unknown }
   }>
+  const failedChild = childFixtureRecords('code-mode-parent-child-control', 2) as Array<{
+    type?: unknown
+    data?: { name?: unknown; state?: unknown }
+  }>
 
   expect(parent.some(event => event.type === 'tool/call' && event.data?.name === 'run_code')).toBe(true)
   expect(parent.filter(event => event.type === 'tool/code-dispatch').map(event => event.data?.name)).toEqual([
     'subagent',
+    'wait_agent',
+    'subagent',
     'list_agents',
+    'get_agent_status',
     'get_agent_status',
     'steer_agent',
     'interrupt_agent',
@@ -734,17 +741,26 @@ it('replays parent code dispatch and child lifecycle controls', () => {
   ])
   expect(parent.some(event => event.type === 'agent/inbox/spliced'
     && JSON.stringify(event).includes('CONTROL_REPORT'))).toBe(true)
+  expect(parent.filter(event => event.type === 'agent/inbox/spliced'
+    && JSON.stringify(event).includes('was stopped before it finished'))).toHaveLength(1)
   expect(parent.some(event => event.type === 'agent/inbox/spliced'
-    && JSON.stringify(event).includes('was stopped before it finished'))).toBe(true)
+    && JSON.stringify(event).includes('CONTROL_CHILD_ERROR'))).toBe(true)
   expect(child.some(event => event.type === 'subagent/descriptor')).toBe(true)
   expect(child.some(event => event.type === 'tool/code-dispatch' && event.data?.name === 'report')).toBe(true)
   expect(child.some(event => event.type === 'subagent/progress')).toBe(true)
-  expect(child.some(event => event.type === 'subagent/steer-accepted')).toBe(true)
   expect(child.some(event => event.type === 'subagent/interrupt-requested')).toBe(true)
   expect(child.some(event => event.type === 'subagent/closed')).toBe(true)
   expect(child.filter(event => event.type === 'subagent/progress').map(event => event.data?.state)).toEqual([
-    'running', 'running', 'interrupted', 'settled',
+    'running', 'interrupted', 'settled',
   ])
+  expect(failedChild.some(event => event.type === 'subagent/descriptor')).toBe(true)
+  expect(failedChild.some(event => (event.type === 'tool/code-dispatch' || event.type === 'tool/call')
+    && event.data?.name === 'run_code')).toBe(true)
+  expect(failedChild.some(event => event.type === 'tool/result'
+    && JSON.stringify(event).includes('CONTROL_CHILD_ERROR'))).toBe(true)
+  expect(failedChild.some(event => event.type === 'subagent/progress'
+    && event.data?.state === 'error')).toBe(true)
+  expect(failedChild.some(event => event.type === 'subagent/closed')).toBe(true)
 })
 
 defineAcpSnapshotSuite({
