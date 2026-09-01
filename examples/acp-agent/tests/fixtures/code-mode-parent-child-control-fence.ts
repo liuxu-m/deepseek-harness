@@ -10,22 +10,20 @@ export const name = 'code-mode-parent-child-control-fence'
  * @param ctx - assembled ACP-agent context.
  */
 export function apply(ctx: Context): void {
-  let parentCompleted = false
-  let childStarted = false
+  let childReported = false
   const release = Promise.withResolvers<undefined>()
   ctx.effect(() => {
     const disposeSession = ctx.root.on('session/event', (session, event) => {
       if (session.header.parentSession !== undefined) return
-      if (event.type === 'subagent/progress') {
-        childStarted = true
-        if (event.data.state === 'reported' || event.data.state === 'interrupted' || event.data.state === 'closed') {
+      if (event.type === 'agent/inbox/spliced') {
+        if (event.data.inserted.some(message => message.source.kind === 'subagent-report')) {
+          childReported = true
           release.resolve(undefined)
         }
       }
-      if (event.type === 'turn/end' && event.data.turn === 1) parentCompleted = true
     })
     const disposeStep = ctx.root.on('agent/pre-step', async ({ turn, step }, next) => {
-      if (parentCompleted && childStarted && turn === 1 && step > 1) await release.promise
+      if (turn === 1 && step === 2 && !childReported) await release.promise
       return next()
     })
     return () => {

@@ -2696,6 +2696,13 @@ describe('SubagentRuntime.close persistence', () => {
     const { ctx, parent } = await setupWith(adapter)
     const started = await ctx.subagents.startContinuable(startSpec(parent))
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    const child = ctx.agents.get(started.childId)
+    if (child === undefined) throw new Error('expected a live child Agent')
+    child.ctx.on('session/event', () => {})
+    let closedNotifications = 0
+    ctx.on('session/event', (_session, event) => {
+      if (event.type === 'subagent/closed') closedNotifications += 1
+    })
     const resultPromise = ctx.subagents.close(started.childId, { kind: 'direct-parent', agent: parent })
     hold.resolve(undefined)
     const result = await resultPromise
@@ -2705,5 +2712,6 @@ describe('SubagentRuntime.close persistence', () => {
     expect(closed).toHaveLength(1)
     expect(loaded.events.map(event => event.seq)).toEqual(loaded.events.map((_event, index) => index))
     expect(closed[0]?.type).toBe('subagent/closed')
+    expect(closedNotifications).toBe(1)
   })
 })

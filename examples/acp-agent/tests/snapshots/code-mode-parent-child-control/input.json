@@ -2,7 +2,7 @@
   "steps": [
     { "op": "initialize" },
     { "op": "newSession" },
-    { "op": "prompt", "text": "Start two background children, inspect their status, steer the first, interrupt and close the second, then wait for settlement and reply CONTROL_DONE." },
+    { "op": "prompt", "text": "Start a controlled child, report, inspect status, steer, interrupt, close, wait, then reply CONTROL_DONE." },
     { "op": "waitForTurnEnd" }
   ]
 }

@@ -13,6 +13,12 @@ const TOOLS = '{{tools}}'
 const EVENT_TIME = '{{eventTime}}'
 const EVENT_OMITTED_BYTES = '{{eventOmittedBytes}}'
 const PACKED_CHUNK_ROW_TYPES = new Set(['text-chunks', 'reasoning-chunks', 'tool-call-chunks'])
+const SUBAGENT_CONTROL_EVENT_TYPES = new Set([
+  'subagent/progress',
+  'subagent/steer-accepted',
+  'subagent/interrupt-requested',
+  'subagent/closed',
+])
 
 function isPackedFixtureRow(record: Record<string, unknown>): boolean {
   return typeof record.type === 'string' && PACKED_CHUNK_ROW_TYPES.has(record.type)
@@ -329,6 +335,13 @@ export function normalizeSessionLog(
     if (record.type === 'hook/result' && record.data !== null && typeof record.data === 'object') {
       const data = record.data as Record<string, unknown>
       if ('durationMs' in data) data.durationMs = 0
+    }
+    if (typeof record.type === 'string'
+      && SUBAGENT_CONTROL_EVENT_TYPES.has(record.type)
+      && record.data !== null
+      && typeof record.data === 'object') {
+      const data = record.data as Record<string, unknown>
+      if ('occurredAt' in data) data.occurredAt = 0
     }
     return scrubValue(record, ctx, cwdPathMode) as Record<string, unknown>
   })

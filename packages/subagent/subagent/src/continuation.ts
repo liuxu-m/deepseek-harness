@@ -23,6 +23,7 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { SubagentControlRequestId } from './types.ts'
 import type {
   Agent,
@@ -668,7 +669,7 @@ export class SubagentContinuationManager {
           ignorable: true as const,
         }
         await this.requirePersistence().append(childId, [closedEvent])
-        this.ctx.emit('session/event', session, closedEvent)
+        this.ctx.emit(scopeTarget(session, undefined), 'session/event', session, closedEvent)
         completion.resolve({ requestId, agentId: childId, accepted: true, noOp: false, previousState, closedAgentIds })
       } catch (error: unknown) {
         completion.reject(error)
