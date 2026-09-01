@@ -2,9 +2,17 @@
 
 English | [中文](README.zh.md)
 
-The optional, globally named `send_message`, `interrupt_agent`, and `list_agents` tools are thin adapters over `ctx.subagents`. Provider-bound `@deepseek-ai/dsh-tool-subagent` instances register distinct delegation tools per transport; this separately loaded package registers shared control tools once, so multiple delegation tools never register duplicate global controls. The root plugin registers `send_message` and `interrupt_agent` and requires only `subagents`; the separately loadable `./list-agents` plugin registers `list_agents` and declares `subagents` plus `agents` as load-time dependencies. Its catalog reads additionally require the session store and projection registry at call time, but no query service. A deployment can keep the root tools while omitting the list tool. No tool's presence determines whether a delegation tool starts continuable work. These tools own only the parent-to-child direction; the independently installed [`@deepseek-ai/dsh-tool-subagent-report`](../tool-subagent-report/README.md) owns the child-to-parent direction.
+`wait_agent` waits for a pending message in the calling Agent inbox without reading or removing it. It returns `Wait completed.` when a next step can claim a message and `Wait timed out.` when its `timeout_ms` expires; it owns that parameterized timeout and declares no static tool deadline. After completion the model must end its current step, because the message enters model context only at the following step boundary.
 
-The tool performs no lifecycle routing — residency and cold resume belong to the subagent service. It passes `exec.agent` as the exact live parent that authorizes delivery and records every message source as `{ kind: 'coordinator', senderSessionId: parent.id }`, which the service retains but never treats as authority. Every message becomes the subagent's next FIFO turn through `Agent.followup()`: if the child is still working, the message waits until its current turn finishes, so it cannot redirect work already underway. The tool forwards its execution signal, which owns admission only until inbox acceptance; once the child accepts the message the accepted turn cannot be cancelled through this tool. This call returns no child reply — its transcript by that id is the source of what it did — and a child with `report` sends content on its own initiative as a separate parent message. A delivery failure becomes an errored tool result stating the message was not delivered.
+The globally named `send_message`, `followup_task`, `steer_agent`, `interrupt_agent`, `close_agent`, and `get_agent_status` tools are thin adapters over `ctx.subagents`. `send_message` queues without waking; `followup_task` queues and wakes; `steer_agent` delivers at the next safe step; the remaining tools interrupt, close, or inspect a child. Provider-bound delegation tools remain separate, and these controls are registered once by this package.
+
+The tool performs no lifecycle routing — residency and cold resume belong to the subagent service. It passes `exec.agent` as the exact live parent and records coordinator message sources, which are retained but never treated as authority. Each control returns a structured receipt; status returns a snapshot only, and close returns the completed child-id list.
+
+## Control semantics
+
+`send_message` accepts FIFO work without waking a parked child; `followup_task` accepts the same later-turn work and wakes it; `steer_agent` schedules corrective context at the next safe step. All three require the exact live direct parent. `interrupt_agent` is available to a live ancestor and stops only the current turn, preserving queued work and descendants. `close_agent` requires direct-parent or cascading-ancestor authority, closes the requested child subtree, and reports the closed ids; an accepted close or interrupt receipt is not a quiescence guarantee. `get_agent_status` reads one authorized status snapshot and must not be used as a polling loop.
+
+Control receipts and durable progress observations are projected to SDK and UI consumers as notifications. They expose the accepted request and child state, not hidden prompts, tool inputs, or an unbounded child transcript. Child sessions and their descriptors remain the recovery record across process residency changes.
 
 `interrupt_agent(agent_id)` passes `exec.agent` as the exact live ancestor authority for `ctx.subagents.interrupt()`: the target may be a direct child or a deeper descendant, and the service — never this tool — verifies the caller against the target Activation's recorded lineage. Only the target's current turn stops (`keepInbox`): queued messages stay parked until a later `send_message`, published descendants keep running, and the child stays available for follow-ups. The call returns as soon as the stop request is accepted, without waiting for target quiescence; an absent or already-settled target is an accepted no-op, while self, sibling, stale, and non-ancestor callers become errored results.
 
@@ -16,7 +24,7 @@ The tool performs no lifecycle routing — residency and cold resume belong to t
 
 #### What the model sees
 
-The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control): `send_message` takes `subagent_id` and `message`, describing that the message becomes the subagent's next turn, that this call returns no answer from the subagent, and that a failure means the message was not delivered; `interrupt_agent` takes `agent_id`, describing that only the current turn stops, queued messages park, descendants keep running, and acceptance precedes the actual stop; `list_agents` takes the optional `scope` enum.
+The generated [schemas](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent-control) expose `send_message`, `followup_task`, `steer_agent`, `interrupt_agent`, `close_agent`, `get_agent_status`, and `list_agents`. Delivery tools take a target id and message, steering applies at the next safe step, interruption reports the previous state, close reports affected child ids, and status returns the service snapshot.
 
 #### Token effect
 
@@ -69,6 +77,9 @@ Grows linearly with the listed continuable children — the whole tree under the
 Append-only; each result follows the reusable request prefix.
 
 ## Known Limitations and Deferred Work
+
+- **One global `wait_agent` per registry scope** — this package and `@deepseek-ai/dsh-experimental-tool-agent-team` both register that global name. A deployment selects one collaboration model; loading both in one scope fails deterministically on duplicate registration, although the generated catalog lists both schemas.
+- **Waiting is an inbox edge, not child inspection** — `wait_agent` neither checks child status nor returns a child result. It wakes for any pending message on the calling Agent, leaves that message untouched for the next step, and should not be called without a running child, expected report, or user input to await.
 
 - **A queued message has no independent result** — acceptance returns only its inbox `messageId`; the child's work lands in the durable child Session and is never collected through this tool. A child granted `report` may send selected content back separately, but that message is not this call's result.
 - **No steering of the current turn** — every message opens a later FIFO turn, so a message sent while the child is working runs only after its current turn finishes and cannot redirect it.

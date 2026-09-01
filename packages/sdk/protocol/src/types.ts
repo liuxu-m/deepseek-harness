@@ -10,7 +10,12 @@
 
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import type { SubagentStopReason } from '@deepseek-ai/dsh-subagent'
+import type {
+  SubagentCloseResult,
+  SubagentControlResult,
+  SubagentStatusSnapshot,
+  SubagentStopReason,
+} from '@deepseek-ai/dsh-subagent'
 
 /** Parameters for the process-wide SDK handshake. */
 export interface InitializeParams {
@@ -89,17 +94,77 @@ export interface SubagentFinishedNotification {
   lastAssistantMessage?: ContentBlock[]
 }
 
+/** Progress projection notification for one child. */
+export interface SubagentProgressNotification {
+  sessionId: string
+  eventSeq: number
+  occurredAt: number
+  agentId: string
+  parentSessionId: string
+  state: string
+  pendingMessageCount: number
+  phase?: string
+  lastActivityAt?: number
+}
+
+/** Parent-visible report notification. */
+export interface SubagentReportNotification {
+  sessionId: string
+  eventSeq: number
+  occurredAt: number
+  agentId: string
+  parentSessionId: string
+  report: string
+}
+
+/** Accepted control edge notification. */
+export interface SubagentControlNotification {
+  sessionId: string
+  eventSeq: number
+  occurredAt: number
+  agentId: string
+  parentSessionId: string
+  requestId: string
+  action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close'
+  accepted: boolean
+  messageId?: string
+  closedAgentIds?: string[]
+}
+
+/** Parameters for a parent-authorized control operation. */
+export interface SubagentControlParams {
+  parentSessionId: string
+  agentId: string
+  action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close'
+  message?: string
+  cascade?: boolean
+}
+
+/** Result of a control operation. */
+export type SubagentControlResultWire = SubagentControlResult | SubagentCloseResult
+
+/** Parameters for querying one child status. */
+export interface SubagentStatusParams {
+  parentSessionId: string
+  agentId: string
+}
+
 /** Server-to-client notifications by JSON-RPC method name. */
 export interface HarnessSdkNotificationMap {
   'session.event': SessionEventNotification
   'session.status': SessionStatusNotification
   'subagent.started': SubagentStartedNotification
   'subagent.finished': SubagentFinishedNotification
+  'subagent.progress': SubagentProgressNotification
+  'subagent.report': SubagentReportNotification
+  'subagent.control': SubagentControlNotification
 }
 
 /** Client-to-server request methods with their param and result shapes. */
 export interface HarnessSdkRequestMap {
   'initialize': { params: InitializeParams; result: InitializeResult }
   'session/prompt': { params: SessionPromptParams; result: SessionPromptResult }
+  'subagent/control': { params: SubagentControlParams; result: SubagentControlResultWire }
+  'subagent/status': { params: SubagentStatusParams; result: SubagentStatusSnapshot }
   'shutdown': { params: undefined; result: Record<string, never> }
 }

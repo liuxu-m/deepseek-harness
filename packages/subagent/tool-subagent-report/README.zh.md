@@ -8,9 +8,11 @@
 
 `reportDelivery` 为每条已接受的报告选择父级调度方式。`next-step`（默认值）使用 `parent.steer()`：运行中的父级会在最近的安全 step 边界收到报告，空闲父级则会启动一个轮次。按顺序接受的报告会共享 next-step FIFO，稍后由管理器撰写的结算通知也进入该队列，因此父级不会在更早的报告之前看到结算；一起等待的报告会进入同一个领取批次。`quiet` 使用 `parent.inject()`，添加相同的 next-step 上下文，但不会唤醒停驻的父级。这是部署调度策略，因此面向模型的 schema 不能在单次调用中选择或覆盖该策略。
 
+带前缀的父级消息会持久化，并且是 `subagent.report` SDK/UI 通知的来源。进度与控制通知仍是独立观测：报告是 child 选定的内容，而这些通知暴露生命周期状态和已接受的控制请求。报告通道既不会流式传输 child transcript，也不会创建投递回执。
+
 作用域局部注册有意不受子级全局 `toolFilter` 影响，因此委派允许列表无法移除唯一的返回通道。需要子级不具备返回通道的部署应省略本包。
 
-贡献体以 `installReportTool(childCtx, ctx, delivery)` 导出，以便检查类消费方把 `report` 及其指引安装到新创建的子级作用域中，并返回同时撤销两者的唯一 disposer。全局注册表无法公开作用域局部 schema，因此生成的工具目录会使用这条路径。生产组合仍通过 `apply()` 进入；subagent seam 的贡献注册表保持私有。
+贡献体以 `installReportTool(childCtx, ctx, delivery, maxReportBytes)` 导出，以便检查类消费方把 `report` 及其指引安装到新创建的子级作用域中；默认 UTF-8 上限为 16,384 字节，并返回同时撤销两者的唯一 disposer。全局注册表无法公开作用域局部 schema，因此生成的工具目录会使用这条路径。生产组合仍通过 `apply()` 进入；subagent seam 的贡献注册表保持私有。
 
 ## 模型体验
 
@@ -50,7 +52,7 @@
 
 #### Token 影响
 
-子级的完整 `output` 加上一行前缀；本包不设上限。
+子级的完整 `output` 加上一行前缀；内容受配置的 `maxReportBytes` UTF-8 字节上限约束。
 
 #### KV Cache 影响
 

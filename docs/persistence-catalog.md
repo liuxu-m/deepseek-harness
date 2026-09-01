@@ -693,6 +693,17 @@ Source: [`packages/core/session/src/types.ts:254`](../packages/core/session/src/
 
 ### `subagent/*`
 
+<a id="subagentclosed--log-only"></a>
+
+#### `subagent/closed` — log-only
+
+```ts persistence-catalog
+/** Child close transaction completed. */
+'subagent/closed': Omit<SubagentControlEvent, 'messageId'> & { readonly closedAgentIds: readonly import('@deepseek-ai/dsh-session').SessionId[] }
+```
+
+Source: [`packages/subagent/subagent/src/descriptor.ts:64`](../packages/subagent/subagent/src/descriptor.ts)
+
 <a id="subagentdescriptor--log-only"></a>
 
 #### `subagent/descriptor` — log-only
@@ -708,7 +719,51 @@ Source: [`packages/core/session/src/types.ts:254`](../packages/core/session/src/
 'subagent/descriptor': SubagentDescriptorData
 ```
 
-Source: [`packages/subagent/subagent/src/descriptor.ts:37`](../packages/subagent/subagent/src/descriptor.ts)
+Source: [`packages/subagent/subagent/src/descriptor.ts:56`](../packages/subagent/subagent/src/descriptor.ts)
+
+<a id="subagentinterrupt-requested--log-only"></a>
+
+#### `subagent/interrupt-requested` — log-only
+
+```ts persistence-catalog
+/** Interrupt request registered for a child. */
+'subagent/interrupt-requested': Omit<SubagentControlEvent, 'messageId'> & { readonly messageId?: MessageId }
+```
+
+Source: [`packages/subagent/subagent/src/descriptor.ts:62`](../packages/subagent/subagent/src/descriptor.ts)
+
+<a id="subagentmessage-accepted--log-only"></a>
+
+#### `subagent/message-accepted` — log-only
+
+```ts persistence-catalog
+/** Queue message accepted by a child. */
+'subagent/message-accepted': SubagentControlEvent
+```
+
+Source: [`packages/subagent/subagent/src/descriptor.ts:58`](../packages/subagent/subagent/src/descriptor.ts)
+
+<a id="subagentprogress--log-only"></a>
+
+#### `subagent/progress` — log-only
+
+```ts persistence-catalog
+/** Progress projection update. */
+'subagent/progress': Omit<SubagentControlEvent, 'requestId' | 'messageId'> & { readonly pendingMessageCount: number }
+```
+
+Source: [`packages/subagent/subagent/src/descriptor.ts:66`](../packages/subagent/subagent/src/descriptor.ts)
+
+<a id="subagentsteer-accepted--log-only"></a>
+
+#### `subagent/steer-accepted` — log-only
+
+```ts persistence-catalog
+/** Steering message accepted by a child. */
+'subagent/steer-accepted': SubagentControlEvent
+```
+
+Source: [`packages/subagent/subagent/src/descriptor.ts:60`](../packages/subagent/subagent/src/descriptor.ts)
 
 ### `team/*`
 

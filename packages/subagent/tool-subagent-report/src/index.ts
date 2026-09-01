@@ -31,10 +31,15 @@ export interface Config {
    * waking, so a parked parent waits for another waking input.
    */
   reportDelivery?: SubagentReportDelivery
+  /** Maximum report output size in UTF-8 bytes. */
+  maxReportBytes?: number
 }
+
+const DEFAULT_MAX_REPORT_BYTES = 16_384
 
 export const Config: z<Config> = z.object({
   reportDelivery: z.union(['quiet', 'next-step'] as const).default('next-step'),
+  maxReportBytes: z.number().step(1).min(1).default(DEFAULT_MAX_REPORT_BYTES),
 })
 
 /**
@@ -44,12 +49,14 @@ export const Config: z<Config> = z.object({
  * @param childCtx - child-scoped context receiving the tool and the guidance.
  * @param ctx - service context used for delivery.
  * @param delivery - resolved deployment scheduling policy.
+ * @param maxReportBytes - maximum UTF-8 byte length accepted for one report.
  * @returns disposer that attempts both child registrations before reporting cleanup failures.
  */
 export function installReportTool(
   childCtx: Context,
   ctx: Context,
   delivery: SubagentReportDelivery,
+  maxReportBytes: number = DEFAULT_MAX_REPORT_BYTES,
 ): () => void {
   const disposeSection = childCtx.systemPrompt.section({
     name: 'tool:report',
@@ -92,6 +99,10 @@ export function installReportTool(
         }],
       },
       async execute(args, exec) {
+        const reportBytes = Buffer.byteLength(args.output, 'utf8')
+        if (reportBytes > maxReportBytes) {
+          throw new Error(`report output exceeds the configured UTF-8 limit of ${maxReportBytes} bytes`)
+        }
         const content: ContentBlock[] = [{ type: 'text', text: args.output }]
         // Scope-local resolution guarantees an Agent. The service still verifies
         // its exact live Activation identity at the authority boundary.
@@ -136,7 +147,10 @@ export function installReportTool(
 export function apply(ctx: Context, config: Config = {}): void {
   // Config() applies the schema default at runtime; the schemastery return
   // type keeps the input's optional shape, so assert the resolved one.
-  const { reportDelivery } = Config(config) as { reportDelivery: SubagentReportDelivery }
+  const { reportDelivery, maxReportBytes } = Config(config) as {
+    reportDelivery: SubagentReportDelivery
+    maxReportBytes: number
+  }
   ctx.subagents.registerContinuableSetup(childCtx =>
-    installReportTool(childCtx, ctx, reportDelivery))
+    installReportTool(childCtx, ctx, reportDelivery, maxReportBytes))
 }

@@ -324,3 +324,30 @@
 .refresh:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
+
+.controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.controls button {
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.controls button:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.statusDetails {
+  display: block;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}

@@ -11,6 +11,8 @@
  * - `FAKE_STATUS`: the `session.finished` status (default `ok`).
  * - `FAKE_REASON_KIND`: the `session.finished` reason kind (default `completed`; `none` omits the reason).
  * - `FAKE_SUBAGENT`: also emit a child session (subagent.started + child event + subagent.finished).
+ * - `FAKE_SUBAGENT_CONTROL`: additionally emit progress, report, and accepted
+ *   control notifications for the scripted child.
  * - `FAKE_ECHO_CWD`: prefix the assistant text with the process cwd.
  * - `FAKE_ECHO_ENV`: comma-separated env names to echo as `name=value` lines in the assistant text.
  * - `FAKE_MALFORMED`: `initialize` returns `{}` (no serverInfo); `prompt` returns `{}` (no accepted).
@@ -145,6 +147,50 @@ function runTurn(sessionId: string): void {
       stopReason: 'completed',
       lastAssistantMessage: [{ type: 'text', text: 'child says hi' }],
     })
+    if (env.FAKE_SUBAGENT_CONTROL !== undefined) {
+      const requestId = `${childId}-control-1`
+      notify('subagent.progress', {
+        sessionId,
+        eventSeq: seq++,
+        occurredAt: 0,
+        agentId: childId,
+        parentSessionId: sessionId,
+        state: 'waiting',
+        pendingMessageCount: 0,
+        phase: 'reported',
+        lastActivityAt: 0,
+      })
+      notify('subagent.report', {
+        sessionId,
+        eventSeq: seq++,
+        occurredAt: 0,
+        agentId: childId,
+        parentSessionId: sessionId,
+        report: 'child says hi',
+      })
+      notify('subagent.control', {
+        sessionId,
+        eventSeq: seq++,
+        occurredAt: 0,
+        agentId: childId,
+        parentSessionId: sessionId,
+        requestId,
+        action: 'steer',
+        accepted: true,
+        messageId: `${childId}-message-1`,
+      })
+      notify('subagent.control', {
+        sessionId,
+        eventSeq: seq++,
+        occurredAt: 0,
+        agentId: childId,
+        parentSessionId: sessionId,
+        requestId: `${childId}-control-2`,
+        action: 'close',
+        accepted: true,
+        closedAgentIds: [childId],
+      })
+    }
   }
 }
 

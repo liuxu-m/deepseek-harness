@@ -21,6 +21,9 @@ import type {
   SessionEventNotification,
   SessionPromptParams,
   SessionPromptResult,
+  SubagentControlResultWire,
+  SubagentControlParams,
+  SubagentStatusParams,
   SubagentFinishedNotification,
   SubagentStartedNotification,
 } from '@deepseek-ai/dsh-sdk-protocol'
@@ -61,6 +64,8 @@ export class HarnessSdkJsonRpcServer {
   private readonly disposers: (() => void)[] = []
   private shutdownTask: Promise<Record<string, never>> | undefined
   private shuttingDown = false
+  private controlNotificationSeq = 0
+  private readonly emittedControlRequests = new Set<string>()
 
   constructor(
     private readonly ctx: Context,
@@ -71,6 +76,51 @@ export class HarnessSdkJsonRpcServer {
     this.disposers.push(ctx.on('session/event', (session, event) => {
       const payload: SessionEventNotification = { sessionId: String(session.id), event }
       this.transport.notify('session.event', payload)
+      if (event.type === 'subagent/progress') {
+        this.transport.notify('subagent.progress', { sessionId: String(session.id), ...event.data })
+      } else if (event.type === 'agent/inbox/spliced' && Array.isArray(event.data.inserted)) {
+        for (const message of event.data.inserted) {
+          if (typeof message !== 'object' || message === null || !('source' in message)) continue
+          const source = (message as { source?: unknown }).source
+          if (typeof source !== 'object' || source === null || !('kind' in source)
+            || (source as { kind?: unknown }).kind !== 'subagent-report') continue
+          const content = (message as { content?: unknown }).content
+          let report = Array.isArray(content)
+            ? content.filter((block): block is { type: 'text'; text: string } => (
+              typeof block === 'object' && block !== null && (block as { type?: unknown }).type === 'text'
+              && typeof (block as { text?: unknown }).text === 'string'))
+              .map(block => block.text).join('')
+            : ''
+          report = report.replace(/^Background subagent [^\n]+ reported:\n/, '')
+          this.transport.notify('subagent.report', {
+            sessionId: String(session.id), eventSeq: event.seq, occurredAt: event.time,
+            agentId: String('senderSessionId' in source
+              ? (source as { senderSessionId?: unknown }).senderSessionId ?? session.id : session.id),
+            parentSessionId: String(session.id), report,
+          })
+        }
+      } else if (event.type === 'subagent/closed') {
+        this.transport.notify('subagent.control', {
+          sessionId: String(event.data.parentSessionId), eventSeq: event.data.eventSeq,
+          occurredAt: event.data.occurredAt, agentId: String(event.data.agentId),
+          parentSessionId: String(event.data.parentSessionId), requestId: String(event.data.requestId),
+          action: 'close', accepted: true, closedAgentIds: event.data.closedAgentIds.map(String),
+        })
+        this.emittedControlRequests.add(String(event.data.requestId))
+      } else if (event.type === 'subagent/message-accepted' || event.type === 'subagent/steer-accepted'
+        || event.type === 'subagent/interrupt-requested') {
+        const action = event.type === 'subagent/steer-accepted' ? 'steer'
+          : event.type === 'subagent/interrupt-requested' ? 'interrupt'
+            : event.data.mode
+        this.transport.notify('subagent.control', {
+          sessionId: String(event.data.parentSessionId), eventSeq: event.data.eventSeq,
+          occurredAt: event.data.occurredAt, agentId: String(event.data.agentId),
+          parentSessionId: String(event.data.parentSessionId), requestId: String(event.data.requestId),
+          action, accepted: true,
+          ...(event.data.messageId === undefined ? {} : { messageId: String(event.data.messageId) }),
+        })
+        this.emittedControlRequests.add(String(event.data.requestId))
+      }
     }))
     this.disposers.push(ctx.on('agent/status', ({ agent, status }) => {
       this.transport.notify('session.status', { sessionId: String(agent.session.id), status })
@@ -142,6 +192,49 @@ export class HarnessSdkJsonRpcServer {
     return { messageId: message.id }
   }
 
+  /** Execute one parent-authorized child control operation. */
+  async control(params: SubagentControlParams): Promise<SubagentControlResultWire> {
+    const parent = this.sessions.get(params.parentSessionId)
+    if (parent === undefined) throw new Error(`parent session is not open: ${params.parentSessionId}`)
+    if (this.ctx.agents.get(parent.handle.agent.id) !== parent.handle.agent) {
+      throw new Error(`session agent was disposed outside the server: ${params.parentSessionId}`)
+    }
+    const runtime = this.ctx.get('subagents') as SubagentRuntime | undefined
+    if (runtime === undefined) throw new Error('subagent control capability is unavailable')
+    const content = params.message === undefined ? [] : [{ type: 'text' as const, text: params.message }]
+    const source = { kind: 'user' as const }
+    let result: SubagentControlResultWire
+    switch (params.action) {
+      case 'queue': result = await runtime.queue(parent.handle.agent, SessionId(params.agentId), content, { source, signal: new AbortController().signal }); break
+      case 'followup': result = await runtime.followup(parent.handle.agent, SessionId(params.agentId), content, { source, signal: new AbortController().signal }); break
+      case 'steer': result = await runtime.steer(parent.handle.agent, SessionId(params.agentId), content, { source, signal: new AbortController().signal }); break
+      case 'interrupt': result = runtime.interrupt(SessionId(params.agentId), { kind: 'ancestor', agent: parent.handle.agent }); break
+      case 'close': {
+        const authority = params.cascade === true
+          ? { kind: 'ancestor' as const, agent: parent.handle.agent, cascade: true as const }
+          : { kind: 'direct-parent' as const, agent: parent.handle.agent }
+        result = await runtime.close(SessionId(params.agentId), authority, { cascade: params.cascade === true }); break
+      }
+    }
+    if (!this.emittedControlRequests.delete(String(result.requestId))) this.transport.notify('subagent.control', {
+      sessionId: params.parentSessionId, eventSeq: ++this.controlNotificationSeq,
+      occurredAt: Date.now(), agentId: params.agentId, parentSessionId: params.parentSessionId,
+      action: params.action, accepted: result.accepted, requestId: String(result.requestId),
+      ...(result.messageId === undefined ? {} : { messageId: String(result.messageId) }),
+      ...('closedAgentIds' in result ? { closedAgentIds: result.closedAgentIds.map(String) } : {}),
+    })
+    return result
+  }
+
+  /** Read one parent-authorized child status snapshot. */
+  async status(params: SubagentStatusParams): Promise<unknown> {
+    const parent = this.sessions.get(params.parentSessionId)
+    if (parent === undefined) throw new Error(`parent session is not open: ${params.parentSessionId}`)
+    const runtime = this.ctx.get('subagents') as SubagentRuntime | undefined
+    if (runtime === undefined) throw new Error('subagent status capability is unavailable')
+    return runtime.status(parent.handle.agent, SessionId(params.agentId))
+  }
+
   /**
    * Dispose server-owned agents, adapter, and subscriptions to quiescence.
    * The surrounding context remains running.
@@ -193,6 +286,10 @@ export class HarnessSdkJsonRpcServer {
         return this.initialize(params as unknown as InitializeParams)
       case 'session/prompt':
         return this.prompt(params as unknown as SessionPromptParams)
+      case 'subagent/control':
+        return this.control(params as unknown as SubagentControlParams)
+      case 'subagent/status':
+        return this.status(params as unknown as SubagentStatusParams)
       case 'shutdown':
         return this.shutdown()
       default:

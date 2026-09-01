@@ -147,6 +147,28 @@ describe('DeepSeekHarness', () => {
     await harness.close()
   })
 
+  it('routes parent child control notifications with stable lifecycle fields', async () => {
+    const harness = harnessWith({ FAKE_SUBAGENT: '1', FAKE_SUBAGENT_CONTROL: '1' })
+    const seen: HarnessNotification[] = []
+    await harness.run('control', {
+      sessionId: 'parent-control',
+      onNotification: (notification) => { seen.push(notification) },
+    })
+
+    const progress = seen.find(notification => notification.method === 'subagent.progress')
+    expect(progress?.params).toMatchObject({
+      sessionId: 'parent-control',
+      agentId: 'parent-control-child',
+      parentSessionId: 'parent-control',
+      state: 'waiting',
+      phase: 'reported',
+    })
+    const controls = seen.filter(notification => notification.method === 'subagent.control')
+    expect(controls.map(notification => notification.params.action)).toEqual(['steer', 'close'])
+    expect(controls.every(notification => notification.params.accepted === true)).toBe(true)
+    await harness.close()
+  })
+
   it('sends the configured cwd/provider/model/maxTokens in the handshake exactly once', async () => {
     const dir = await tempDir('sdk-client-init-')
     const recordFile = join(dir, 'init.jsonl')

@@ -23,6 +23,8 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
+import { scopeTarget } from '@deepseek-ai/dsh-scope'
+import { SubagentControlRequestId } from './types.ts'
 import type {
   Agent,
   AgentHandle,
@@ -49,7 +51,20 @@ import {
 import type { DelegatedPolicyOverrides } from './child-agent.ts'
 import { assertSubagentMaxDepth } from './depth.ts'
 import { seedDescriptorTurn } from './descriptor-seed.ts'
-import type { ContinuableCreateRequest, ContinuableCreateSpec, SubagentResult, SubagentStartRequest } from './types.ts'
+import type {
+  ContinuableCreateRequest,
+  ContinuableCreateSpec,
+  SubagentCloseAuthority,
+  SubagentCloseOptions,
+  SubagentCloseResult,
+  SubagentControlResult,
+  SubagentFollowupOptions,
+  SubagentQueueOptions,
+  SubagentResult,
+  SubagentStartRequest,
+  SubagentStatusSnapshot,
+  SubagentSteerOptions,
+} from './types.ts'
 import type { ActivationObserver, ActivationTerminal } from './lifecycle.ts'
 import { SubagentError } from './error.ts'
 import type SubagentActivationSetupRegistry from './activation-setup-registry.ts'
@@ -147,13 +162,6 @@ export type SubagentInterruptAuthority =
   | { readonly kind: 'ancestor'; readonly agent: Agent }
 
 /** Options for following up with one continuable child. */
-export interface SubagentFollowupOptions {
-  /** Durable attribution retained on the delivered message; it grants no authority. */
-  readonly source: MessageSource
-  /** Caller cancellation, owning the operation only until inbox acceptance. */
-  readonly signal: AbortSignal
-}
-
 /**
  * The residency state of one continuable child, derived from Agent quiescence
  * and the owned-child set rather than a second state machine:
@@ -368,6 +376,9 @@ export class SubagentContinuationManager {
    */
   private readonly closingScopes = new Map<Agent, Set<Agent>>()
   private draining = false
+  private controlSequence = 0
+  private readonly closeResults = new Map<SessionId, Promise<SubagentCloseResult>>()
+  private readonly closeOwners = new Map<SessionId, Agent>()
 
   constructor(
     private readonly ctx: Context,
@@ -496,7 +507,7 @@ export class SubagentContinuationManager {
    * @param childId - the durable child session id.
    * @param content - the user-role content to deliver.
    * @param options - the message source fields and caller cancellation.
-   * @returns the accepted message's inbox id.
+   * @returns the accepted control request receipt.
    * @throws when parent authority, availability, or admission rejects the delivery.
    */
   async followup(
@@ -504,12 +515,14 @@ export class SubagentContinuationManager {
     childId: SessionId,
     content: ContentBlock[],
     options: SubagentFollowupOptions,
-  ): Promise<MessageId> {
+  ): Promise<SubagentControlResult> {
     this.assertAdmitting(parent)
+    if (this.closeResults.has(childId)) throw new SubagentError(`subagent "${childId}" is closed`, 'ACTIVATION_CLOSING')
+    const requestId = SubagentControlRequestId(randomUUID())
     while (true) {
       const live = await this.locks.run(childId, async () => {
         const activation = this.activations.get(childId)
-        if (activation === undefined) return this.coldResume(parent, childId, content, options)
+        if (activation === undefined) return this.coldResume(parent, childId, content, options, true, requestId)
         // A delivery that arrives after the disposal transaction began must not
         // reach a handle being torn down; wait for release, then cold-resume.
         /* v8 ignore next 3 -- the send-versus-dispose cutoff: reaching this arm needs a
@@ -519,15 +532,258 @@ export class SubagentContinuationManager {
         if (activation.disposal !== undefined) {
           return activation.disposal.then(() => undefined, () => undefined)
         }
-        return this.submitAdmitted(activation, content, options.source, parent, options.signal)
+        return this.submitAdmitted(activation, content, options.source, parent, options.signal, requestId)
       })
       /* v8 ignore start -- only the lost-cutoff arm above returns undefined, so only that
        * race reaches the retry below, which then cold-resumes a new Activation. */
-      if (live !== undefined) return live
+      if (live !== undefined) return { requestId, agentId: childId, accepted: true, messageId: live }
       this.assertAdmitting(parent)
       options.signal.throwIfAborted()
       /* v8 ignore stop */
     }
+  }
+
+  /** Queue a message without waking the child's driver.
+   * @param parent - exact live direct parent.
+   * @param childId - durable child id.
+   * @param content - user-role content.
+   * @param options - source and cancellation options.
+   * @returns acceptance receipt.
+   */
+  async queue(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentQueueOptions): Promise<SubagentControlResult> {
+    this.assertAdmitting(parent)
+    if (this.closeResults.has(childId)) throw new SubagentError(`subagent "${childId}" is closed`, 'ACTIVATION_CLOSING')
+    const requestId = SubagentControlRequestId(randomUUID())
+    const messageId = await this.locks.run(childId, async () => {
+      const activation = this.activations.get(childId)
+      if (activation !== undefined) {
+        if (activation.disposal !== undefined) throw new SubagentError(`subagent "${childId}" is closing`, 'ACTIVATION_CLOSING')
+        this.authorizeLineage(parent, childId, activation.handle.agent.session.header.parentSession)
+        options.signal.throwIfAborted()
+        const message = createUserMessage({ content, source: options.source })
+        activation.handle.agent.inbox.append('next-turn', message)
+        activation.announced = true
+        this.appendControlEvent(activation, 'subagent/message-accepted', requestId, message.id, 'queue')
+        return message.id
+      }
+      return this.coldResume(parent, childId, content, { ...options, source: options.source }, false, requestId)
+    })
+    return { requestId, agentId: childId, accepted: true, messageId }
+  }
+
+  /** Queue steering content for the next safe step.
+   * @param parent - exact live direct parent.
+   * @param childId - durable child id.
+   * @param content - steering content.
+   * @param options - source and cancellation options.
+   * @returns acceptance receipt.
+   */
+  async steer(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentSteerOptions): Promise<SubagentControlResult> {
+    this.assertAdmitting(parent)
+    if (this.closeResults.has(childId)) return { requestId: SubagentControlRequestId(randomUUID()), agentId: childId, accepted: false }
+    const requestId = SubagentControlRequestId(randomUUID())
+    const messageId = await this.locks.run(childId, async () => {
+      const activation = this.activations.get(childId)
+      if (activation === undefined) throw new SubagentError(`subagent "${childId}" is not active`, 'NOT_FOUND')
+      if (activation.disposal !== undefined) return undefined
+      this.authorizeLineage(parent, childId, activation.handle.agent.session.header.parentSession)
+      options.signal.throwIfAborted()
+      const message = createUserMessage({ content, source: options.source })
+      activation.handle.agent.steer(message)
+      activation.announced = true
+      this.appendControlEvent(activation, 'subagent/steer-accepted', requestId, message.id, 'steer')
+      return message.id
+    })
+    return { requestId, agentId: childId, accepted: messageId !== undefined, effectiveStep: 'next-step', ...(messageId === undefined ? {} : { messageId }) }
+  }
+
+  /** Close one continuable child and descendants, sharing its disposal transaction.
+   * @param childId - durable child id.
+   * @param authority - direct-parent or ancestor authority.
+   * @param options - cascade policy.
+   * @returns completed close receipt.
+   */
+  async close(childId: SessionId, authority: SubagentCloseAuthority, options: SubagentCloseOptions = {}): Promise<SubagentCloseResult> {
+    return this.locks.run(childId, () => this.closeUnlocked(childId, authority, options))
+  }
+
+  private async closeUnlocked(
+    childId: SessionId,
+    authority: SubagentCloseAuthority,
+    options: SubagentCloseOptions,
+  ): Promise<SubagentCloseResult> {
+    this.validateCloseAuthority(authority, childId)
+    const existingResult = this.closeResults.get(childId)
+    if (existingResult !== undefined) {
+      if (this.closeOwners.get(childId) !== authority.agent) throw new SubagentError('close requires the original authorized caller', 'UNAUTHORIZED')
+      return existingResult
+    }
+    const requestId = SubagentControlRequestId(randomUUID())
+    const activation = this.activations.get(childId)
+    if (activation === undefined) {
+      return Promise.resolve({ requestId, agentId: childId, accepted: true, noOp: true, previousState: 'completed', closedAgentIds: [] })
+    }
+    const caller = authority.agent
+    const direct = activation.parentSession === caller.id
+    if (authority.kind === 'direct-parent' && !direct) throw new SubagentError('close requires the direct parent', 'UNAUTHORIZED')
+    if (authority.kind === 'ancestor' && !direct && !activation.ancestry.has(caller)) throw new SubagentError('close target is not a descendant', 'UNAUTHORIZED')
+    if (!direct && options.cascade === false) throw new SubagentError('ancestor close requires cascade', 'UNAUTHORIZED')
+    if (activation.disposal !== undefined) {
+      return { requestId, agentId: childId, accepted: true, noOp: true, previousState: 'closed', closedAgentIds: [] }
+    }
+    this.closeOwners.set(childId, caller)
+    const previousState = this.stateOf(activation)
+    const closedAgentIds: SessionId[] = []
+    const cascade = options.cascade !== false
+    const collect = (item: Activation): void => {
+      closedAgentIds.push(item.childId)
+      if (cascade) {
+        for (const id of item.ownedChildren) {
+          const child = this.activations.get(id)
+          if (child) collect(child)
+        }
+      }
+    }
+    collect(activation)
+    const completion = Promise.withResolvers<SubagentCloseResult>()
+    this.closeResults.set(childId, completion.promise)
+    const disposal = this.dispose(activation, cascade)
+    void (async () => {
+      try {
+        await disposal
+        const session = activation.handle.agent.session
+        const closedEvent = {
+          type: 'subagent/closed' as const,
+          seq: session.events.length,
+          time: Date.now(),
+          data: {
+            eventSeq: this.nextControlSequence(activation),
+            occurredAt: Date.now(),
+            agentId: childId,
+            parentSessionId: activation.parentSession,
+            requestId,
+            state: 'closed',
+            closedAgentIds,
+            ignorable: true as const,
+          },
+          ignorable: true as const,
+        }
+        await this.requirePersistence().append(childId, [closedEvent])
+        this.ctx.emit(scopeTarget(session, undefined), 'session/event', session, closedEvent)
+        completion.resolve({ requestId, agentId: childId, accepted: true, noOp: false, previousState, closedAgentIds })
+      } catch (error: unknown) {
+        completion.reject(error)
+      }
+    })()
+    return completion.promise
+  }
+
+  private validateCloseAuthority(authority: SubagentCloseAuthority, childId: SessionId): void {
+    const caller = authority.agent
+    if (this.ctx.agents.get(caller.id) !== caller) throw new SubagentError('close requires an exact live parent or ancestor', 'UNAUTHORIZED')
+    if (caller.id === childId) throw new SubagentError('an agent cannot close itself', 'UNAUTHORIZED')
+  }
+
+  /** Return a service-generated status snapshot for one authorized child.
+   * @param parent - exact live ancestor.
+   * @param childId - durable child id.
+   * @returns current status snapshot.
+   */
+  async status(parent: Agent, childId: SessionId): Promise<SubagentStatusSnapshot> {
+    const activation = this.activations.get(childId)
+    if (activation === undefined) {
+      const loaded = await this.requirePersistence().inspect(childId)
+      if (this.ctx.agents.get(parent.id) !== parent) throw new SubagentError('status requires a live ancestor', 'UNAUTHORIZED')
+      const parentSessionId = loaded.meta.parentSession
+      if (parentSessionId === undefined) throw new SubagentError('status requires a live ancestor', 'UNAUTHORIZED')
+      let lineageParent: SessionId | undefined = parentSessionId
+      const visited = new Set<SessionId>()
+      while (lineageParent !== parent.id) {
+        if (lineageParent === undefined || visited.has(lineageParent)) throw new SubagentError('status requires a live ancestor', 'UNAUTHORIZED')
+        visited.add(lineageParent)
+        const ancestor = await this.requirePersistence().inspect(lineageParent)
+        lineageParent = ancestor.meta.parentSession
+      }
+      const closed = loaded.events.findLast(event => event.type === 'subagent/closed')
+      const progress = loaded.events.findLast(event => event.type === 'subagent/progress')
+      const interrupted = loaded.events.findLast(event => event.type === 'subagent/interrupt-requested')
+      const lastEvent = loaded.events.at(-1)
+      let descriptor: SubagentDescriptorData | undefined
+      try {
+        descriptor = foldSubagentDescriptor(loaded.events.slice(loaded.meta.seedLength ?? 0))
+      } catch {
+        return {
+          agentId: childId,
+          parentSessionId,
+          state: 'failed',
+          pendingMessageCount: 0,
+          diagnostic: 'subagent descriptor could not be reconstructed',
+          ...(lastEvent === undefined ? {} : { lastActivityAt: lastEvent.time }),
+        }
+      }
+      if (descriptor === undefined) {
+        return {
+          agentId: childId,
+          parentSessionId,
+          state: 'failed',
+          pendingMessageCount: 0,
+          diagnostic: 'subagent descriptor is unavailable',
+          ...(lastEvent === undefined ? {} : { lastActivityAt: lastEvent.time }),
+        }
+      }
+      const report = this.lastReport(parent, childId)
+      const state: SubagentStatusSnapshot['state'] = closed !== undefined
+        ? 'closed'
+        : interrupted !== undefined && (progress === undefined || interrupted.time >= progress.time)
+          ? 'interrupted'
+          : progress?.type === 'subagent/progress' && progress.data.state === 'running'
+            ? 'running'
+            : progress?.type === 'subagent/progress' && progress.data.state === 'waiting'
+              ? 'ready'
+              : 'completed'
+      return {
+        agentId: childId,
+        parentSessionId,
+        state,
+        pendingMessageCount: progress?.type === 'subagent/progress' ? progress.data.pendingMessageCount : 0,
+        ...report === undefined ? {} : { lastReport: report },
+        ...(lastEvent === undefined ? {} : { lastActivityAt: lastEvent.time }),
+      }
+    }
+    if (this.ctx.agents.get(parent.id) !== parent || (!activation.ancestry.has(parent) && activation.parentSession !== parent.id)) throw new SubagentError('status requires a live ancestor', 'UNAUTHORIZED')
+    const state = this.stateOf(activation)
+    const pendingMessageCount = activation.handle.agent.inbox.nextTurn.length + activation.handle.agent.inbox.nextStep.length
+    const projectedState = state === 'settled' ? 'completed' : state === 'waiting' ? (pendingMessageCount > 0 ? 'ready' : 'idle') : 'running'
+    const report = this.lastReport(parent, childId)
+    return {
+      agentId: childId,
+      parentSessionId: activation.parentSession,
+      state: projectedState,
+      pendingMessageCount,
+      lastActivityAt: activation.handle.agent.session.events.at(-1)?.time ?? 0,
+      ...report === undefined ? {} : { lastReport: report },
+    }
+  }
+
+  private appendControlEvent(
+    activation: Activation,
+    type: 'subagent/message-accepted' | 'subagent/steer-accepted',
+    requestId: SubagentControlRequestId,
+    messageId: MessageId,
+    mode: 'queue' | 'followup' | 'steer',
+  ): void {
+    activation.handle.agent.session.append(type, {
+      eventSeq: this.nextControlSequence(activation),
+      occurredAt: Date.now(),
+      agentId: activation.childId,
+      parentSessionId: activation.parentSession,
+      requestId,
+      messageId,
+      mode,
+      state: this.stateOf(activation),
+      ignorable: true,
+    })
+    this.appendProgressEvent(activation)
   }
 
   /**
@@ -546,12 +802,14 @@ export class SubagentContinuationManager {
    * already open is likewise an accepted no-op after authorization.
    * @param targetSessionId - the durable child session id to interrupt.
    * @param authority - the human parent address or exact live ancestor Agent.
+   * @returns acceptance receipt with the target's previous state.
    * @throws {SubagentError} `UNAUTHORIZED` when the presented authority does
    *   not own the live target: a stale or self-targeting ancestor caller, a
    *   parent address that is not the live target's durable direct parent, or
    *   an ancestor outside the target's recorded live lineage.
    */
-  interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void {
+  interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): SubagentControlResult {
+    const requestId = SubagentControlRequestId(randomUUID())
     if (authority.kind === 'ancestor') {
       const caller = authority.agent
       // A stale caller is rejected even when the target is absent, so a
@@ -570,7 +828,7 @@ export class SubagentContinuationManager {
       }
     }
     const activation = this.activations.get(targetSessionId)
-    if (activation === undefined) return
+    if (activation === undefined) return { requestId, agentId: targetSessionId, accepted: true, previousState: 'completed' }
     if (authority.kind === 'user') {
       if (activation.handle.agent.session.header.parentSession !== authority.parentSessionId) {
         throw new SubagentError(
@@ -586,11 +844,23 @@ export class SubagentContinuationManager {
     }
     // Disposal already stopped the target with a whole-Activation teardown;
     // a second cancel would be a redundant signal on a closing handle.
-    if (activation.disposal !== undefined) return
+    if (activation.disposal !== undefined) return { requestId, agentId: targetSessionId, accepted: true, previousState: 'closed' }
+    const previousState = this.stateOf(activation)
     activation.handle.agent.cancel(
       authority.kind === 'user' ? { kind: 'user' } : { kind: 'parent' },
       { keepInbox: true },
     )
+    activation.handle.agent.session.append('subagent/interrupt-requested', {
+      eventSeq: this.nextControlSequence(activation),
+      occurredAt: Date.now(),
+      agentId: targetSessionId,
+      parentSessionId: activation.parentSession,
+      requestId,
+      state: 'interrupted',
+      ignorable: true,
+    })
+    this.appendProgressEvent(activation, 'interrupted')
+    return { requestId, agentId: targetSessionId, accepted: true, previousState }
   }
 
   /**
@@ -615,7 +885,9 @@ export class SubagentContinuationManager {
     this.assertAdmitting(child)
     const activation = this.authorizeReporter(child)
     const parent = this.resolveReportParent(child)
-    return this.deliverReport(activation, parent, content, options.delivery)
+    const messageId = this.deliverReport(activation, parent, content, options.delivery)
+    this.appendProgressEvent(activation)
+    return messageId
   }
 
   /** Authorize only the exact Agent of one resident Activation. */
@@ -931,8 +1203,51 @@ export class SubagentContinuationManager {
    */
   private stateOf(activation: Activation): ActivationState {
     if (activation.handle.agent.status === 'running' || activation.accepted.size > 0) return 'running'
+    if (activation.handle.agent.inbox.hasPending) return 'waiting'
     if (activation.ownedChildren.size > 0) return 'waiting'
     return 'settled'
+  }
+
+  /** Allocate a per-child monotonic sequence for log-only control events. */
+  private nextControlSequence(activation: Activation): number {
+    const persisted = activation.handle.agent.session.events.reduce((max, event) => {
+      if (!('data' in event) || typeof event.data !== 'object' || event.data === null) return max
+      const sequence = (event.data as { eventSeq?: unknown }).eventSeq
+      return typeof sequence === 'number' && Number.isSafeInteger(sequence)
+        ? Math.max(max, sequence)
+        : max
+    }, this.controlSequence)
+    this.controlSequence = persisted + 1
+    return this.controlSequence
+  }
+
+  /** Append the replayable state projection after an accepted control edge. */
+  private appendProgressEvent(activation: Activation, state: ActivationState | 'interrupted' = this.stateOf(activation)): void {
+    const agent = activation.handle.agent
+    agent.session.append('subagent/progress', {
+      eventSeq: this.nextControlSequence(activation),
+      occurredAt: Date.now(),
+      agentId: activation.childId,
+      parentSessionId: activation.parentSession,
+      state,
+      pendingMessageCount: agent.inbox.nextTurn.length + agent.inbox.nextStep.length,
+      ignorable: true,
+    })
+  }
+
+  /** Recover the latest safe report text from a parent's durable user messages. */
+  private lastReport(parent: Agent, childId: SessionId): string | undefined {
+    const messages = [
+      ...parent.session.events.flatMap(event => event.type === 'user/message' ? [event.data] : []),
+      ...parent.inbox.nextTurn,
+      ...parent.inbox.nextStep,
+    ]
+    const message = messages.findLast(item => item.source.kind === 'subagent-report'
+      && item.source.senderSessionId === childId)
+    if (message === undefined) return undefined
+    const text = message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+    const prefix = `Background subagent ${childId} reported:\n`
+    return text.startsWith(prefix) ? text.slice(prefix.length) : text
   }
 
   /**
@@ -947,6 +1262,8 @@ export class SubagentContinuationManager {
     childId: SessionId,
     content: ContentBlock[],
     options: SubagentFollowupOptions,
+    wake = true,
+    requestId?: SubagentControlRequestId,
   ): Promise<MessageId> {
     const persistence = this.requirePersistence()
     let loaded: Awaited<ReturnType<typeof persistence.inspect>>
@@ -990,7 +1307,13 @@ export class SubagentContinuationManager {
       if (error instanceof SubagentError) throw error
       throw new SubagentError(`subagent "${childId}" is unavailable`, 'NOT_RESUMABLE', { cause: error })
     }
-    return this.submitMaterialized(activation, content, options.source, parent, options.signal)
+    if (wake) return this.submitMaterialized(activation, content, options.source, parent, options.signal, requestId)
+    options.signal.throwIfAborted()
+    const message = createUserMessage({ content, source: options.source })
+    activation.handle.agent.inbox.append('next-turn', message)
+    activation.announced = true
+    if (requestId !== undefined) this.appendControlEvent(activation, 'subagent/message-accepted', requestId, message.id, wake ? 'followup' : 'queue')
+    return message.id
   }
 
   /**
@@ -1008,9 +1331,10 @@ export class SubagentContinuationManager {
     source: MessageSource,
     parent: Agent,
     signal: AbortSignal,
+    requestId?: SubagentControlRequestId,
   ): Promise<MessageId> {
     try {
-      return this.submitAdmitted(activation, content, source, parent, signal)
+      return this.submitAdmitted(activation, content, source, parent, signal, requestId)
     } catch (error: unknown) {
       /* v8 ignore next -- rollback disposal failures must not mask the
        * pre-acceptance signal, drain, or lifecycle failure. */
@@ -1194,6 +1518,7 @@ export class SubagentContinuationManager {
     content: ContentBlock[],
     source: MessageSource,
     parent: Agent,
+    requestId?: SubagentControlRequestId,
   ): MessageId {
     // Parent-originated delivery keeps the parent live through ownership, so
     // establish it before the message can enter the child's inbox.
@@ -1205,6 +1530,7 @@ export class SubagentContinuationManager {
     // Past this point the caller has an id for this child, so its eventual
     // settlement is something the parent is owed an account of.
     activation.announced = true
+    if (requestId !== undefined) this.appendControlEvent(activation, 'subagent/message-accepted', requestId, accepted, 'followup')
     return accepted
   }
 
@@ -1246,6 +1572,7 @@ export class SubagentContinuationManager {
     source: MessageSource,
     parent: Agent,
     signal: AbortSignal,
+    requestId?: SubagentControlRequestId,
   ): MessageId {
     signal.throwIfAborted()
     this.assertAdmitting(parent)
@@ -1262,7 +1589,7 @@ export class SubagentContinuationManager {
       activation.childId,
       activation.handle.agent.session.header.parentSession,
     )
-    return this.submit(activation, content, source, parent)
+    return this.submit(activation, content, source, parent, requestId)
   }
 
   /**
@@ -1340,14 +1667,14 @@ export class SubagentContinuationManager {
    * @param activation - the residency epoch to stop and release.
    * @returns the one disposal transaction owned by this Activation.
    */
-  private dispose(activation: Activation): Promise<void> {
+  private dispose(activation: Activation, cascade = true): Promise<void> {
     const existing = activation.disposal
     if (existing !== undefined) return existing
     const completion = Promise.withResolvers<void>()
     // Presence is the admission cutoff. Assign it before the async helper starts
     // because that helper cancels Agents and may synchronously re-enter callers.
     activation.disposal = completion.promise
-    void this.finishDisposal(activation).then(completion.resolve, completion.reject)
+    void this.finishDisposal(activation, cascade).then(completion.resolve, completion.reject)
     return completion.promise
   }
 
@@ -1356,16 +1683,17 @@ export class SubagentContinuationManager {
    * @param activation - the Activation whose disposal transaction is installed.
    * @returns once the handle and ownership edge are released.
    */
-  private async finishDisposal(activation: Activation): Promise<void> {
+  private async finishDisposal(activation: Activation, cascade: boolean): Promise<void> {
     this.wake(activation)
     const { childId } = activation
     // Stop top-down before the first await. Slow descendant cleanup may delay
     // release, but it cannot let this ancestor continue model or tool work.
     activation.handle.agent.cancel({ kind: 'parent' })
     const idle = activation.handle.agent.whenIdle()
-    const children = [...activation.ownedChildren]
+    const children = cascade ? [...activation.ownedChildren]
       .map(child => this.activations.get(child))
       .filter((child): child is Activation => child !== undefined)
+      : []
     const childDisposals = children.map(child => this.dispose(child))
 
     const failures: SubagentError[] = []
@@ -1390,6 +1718,7 @@ export class SubagentContinuationManager {
       // Quiesce before the flush: a turn still running would keep
       // appending events the flush cannot cover.
       await idle
+      this.appendProgressEvent(activation, 'settled')
       await this.flushFinalState(activation)
       // Capture the child-dependent edge data while the child is still live:
       // handle disposal unregisters it, and consumers read its log and scope.
@@ -1543,3 +1872,14 @@ export class SubagentContinuationManager {
 
 export type { SubagentDescriptorData }
 export default SubagentContinuationManager
+
+export type {
+  SubagentCloseAuthority,
+  SubagentCloseOptions,
+  SubagentCloseResult,
+  SubagentControlResult,
+  SubagentFollowupOptions,
+  SubagentQueueOptions,
+  SubagentStatusSnapshot,
+  SubagentSteerOptions,
+}

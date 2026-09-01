@@ -39,6 +39,14 @@ export const zh = {
   'readonly.title': '此子代理暂时只读',
   'readonly.oneShot.body': '一次性任务不支持后续消息，可在这里查看完整执行记录。',
   'readonly.body': '父会话当前不在线，重新打开父会话后即可继续发送消息。',
+  'control.queue': '排队发送',
+  'control.followup': '下一轮发送',
+  'control.steer': '插话',
+  'control.interrupt': '打断',
+  'control.close': '关闭',
+  'control.confirmed': '服务已确认',
+  'control.failed': '请求失败',
+  'control.request': '请求 {requestId} 已确认',
 } as const
 
 /** English dictionary, key-identical to the Chinese source of truth. */
@@ -77,6 +85,14 @@ export const en: Record<SubagentKey, string> = {
   'readonly.title': 'This subagent is read-only for now',
   'readonly.oneShot.body': 'One-shot tasks do not accept follow-ups; review the full execution record here.',
   'readonly.body': 'The parent session is offline; reopen it to continue sending messages.',
+  'control.queue': 'Queue',
+  'control.followup': 'Next turn',
+  'control.steer': 'Steer',
+  'control.interrupt': 'Interrupt',
+  'control.close': 'Close',
+  'control.confirmed': 'Confirmed',
+  'control.failed': 'Request failed',
+  'control.request': 'Request {requestId} confirmed',
 }
 
 /** Key domain of the `subagent` namespace (zh is the source of truth). */
