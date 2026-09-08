@@ -85,6 +85,10 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
 | `requestImageMaxBytes` | `1 MiB` | Encoded-byte target for each request image before base64 expansion |
 | `maxRequestImageBytes` | `20 MiB` | Aggregate base64 image-payload bound with oldest-first offload |
 | `retryPolicy` | normal, 5 retries | Provider-owned retry policy executed by `dsh-llm-retry` |
+| `userAgentOverride` | Harness attribution | Replaces this route's `User-Agent` with an exact value a gateway requires |
+| `reasoningSummary` | pi-ai `"auto"` | Overrides `reasoning.summary` on `openai-responses` routes and pins `reasoning.context` to `all_turns` |
+
+A route behind a gateway that fingerprints clients may set `userAgentOverride` to present an exact `User-Agent` instead of the mandatory `deepseek-harness/<version> (+url)` attribution; an empty or newline value is refused at resolution, and model discovery keeps the default attribution. An `openai-responses` route whose upstream rejects pi-ai's default `"auto"` reasoning summary may set `reasoningSummary` (`'auto' | 'detailed' | 'concise' | null`); the override installs an `onPayload` hook that also pins `reasoning.context` to `all_turns`, matching stock Codex.
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-llm-pi-ai) is the exhaustive source for every accepted field and its JSDoc.
 
