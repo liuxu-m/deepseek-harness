@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { materializeStagedLinks, planDesktopRuntime, REPO_ROOT, restoreLegacyHoists, validateDeployedRuntime } from './build-desktop-runtime.ts'
+import { materializeStagedLinks, planDesktopRuntime, REPO_ROOT, restoreLegacyHoists, stagedNodePtyArtifact, validateDeployedRuntime } from './build-desktop-runtime.ts'
 
 const VERSION = '0.1.0-rc.5'
 
@@ -32,7 +32,7 @@ async function makeFixture(): Promise<{ root: string; stage: string; dir: string
     JSON.stringify({ name: '@deepseek-ai/dsh', version: VERSION }, null, 2) + '\n',
   )
   await write(join(stage, 'node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html'), '<html></html>\n')
-  await write(join(stage, 'node_modules/node-pty/prebuilds/win32-x64/pty.node'), '<bin>\ufeff')
+  await write(join(stage, stagedNodePtyArtifact()), '<bin>\ufeff')
   return { root, stage, dir }
 }
 

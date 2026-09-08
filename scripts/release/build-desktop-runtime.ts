@@ -27,8 +27,23 @@ const DEFAULT_STAGE = 'dist/desktop/runtime'
 const REQUIRED_ARTIFACTS = [
   `node_modules/${CLI_PACKAGE}/lib/bin.js`,
   'node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html',
-  'node_modules/node-pty/prebuilds/win32-x64/pty.node',
 ] as const
+
+/**
+ * The node-pty native addon artifact the staged runtime loads on the build
+ * host. node-pty's Windows backend ships as the ConPTY addon (`conpty.node`);
+ * the `pty.node` addon only exists on POSIX, so a fixed win32 `pty.node` path
+ * can never validate a deployed closure.
+ */
+export function stagedNodePtyArtifact(): string {
+  const addon = process.platform === 'win32' ? 'conpty' : 'pty'
+  return `node_modules/node-pty/prebuilds/${process.platform}-${process.arch}/${addon}.node`
+}
+
+/** The staged-closure artifact list, including the host-native node-pty addon. */
+function requiredArtifacts(): readonly string[] {
+  return [...REQUIRED_ARTIFACTS, stagedNodePtyArtifact()]
+}
 
 /** Binary-heavy extensions skipped by the patch-marker scan. */
 const BINARY_EXTENSIONS = new Set([
@@ -100,7 +115,7 @@ export function planDesktopRuntime({ stage }: DesktopRuntimePlanInput): PlannedC
  * @param stage - the deployed runtime directory.
  */
 export async function validateDeployedRuntime(root: string, stage: string): Promise<void> {
-  for (const artifact of REQUIRED_ARTIFACTS) {
+  for (const artifact of requiredArtifacts()) {
     const absolute = join(stage, artifact)
     if (!existsSync(absolute)) {
       throw new Error(`build-desktop-runtime: staged runtime is missing required artifact ${repoRelative(root, absolute)}`)
