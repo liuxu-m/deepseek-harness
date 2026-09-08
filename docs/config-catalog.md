@@ -1167,10 +1167,27 @@ export interface PiAiProviderProfile {
   defaultInput?: PiAiModality[]
   /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
   headers?: Record<string, string>
+  /**
+   * Replace this route's `user-agent` attribution header value. Omission keeps
+   * the mandatory default `deepseek-harness/<version> (+url)`; a deployment
+   * that must present a different client identity to a gateway sets the exact
+   * `User-Agent` value here. Other headers still travel through `headers`.
+   * Empty or newline-containing values are refused at resolution.
+   */
+  userAgentOverride?: string
   /** Provider-neutral pi-ai reasoning level. */
   reasoning?: ModelThinkingLevel
   /** Token budgets used by reasoning providers that support them. */
   thinkingBudgets?: ThinkingBudgets
+  /**
+   * Override the `reasoning.summary` OpenAI Responses value this route emits.
+   * Omission leaves pi-ai's default (`"auto"`); a gateway whose upstream
+   * rejects that default (for example a Codex-compatible gateway that only
+   * accepts `"detailed"`) sets one here. Applied via the `onPayload` hook
+   * after params are built, which also pins `reasoning.context` to
+   * `"all_turns"` so the shape matches stock Codex.
+   */
+  reasoningSummary?: 'auto' | 'detailed' | 'concise' | null
   /** Prompt-cache retention preference. */
   cacheRetention?: CacheRetention
   /** Streaming transport preference. */
@@ -1361,7 +1378,7 @@ export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat['
 
 Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`)
 
-Source: [`packages/llm/llm-pi-ai/src/config.ts:217`](../packages/llm/llm-pi-ai/src/config.ts)
+Source: [`packages/llm/llm-pi-ai/src/config.ts:234`](../packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aidsh-llm-replay"></a>
 
