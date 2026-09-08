@@ -62,6 +62,13 @@
   line-height: 18px;
 }
 
+/* Folded long-reply marker beside the disclosure title: quiet, muted. */
+.foldMarker {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
 /* Finalized footer offset (figma 43:32997); chrome lives in MessageIconActions. */
 .actions {
   margin-top: 16px;
