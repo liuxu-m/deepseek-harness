@@ -69,6 +69,8 @@ import {
   subagentInterruptRequestSchema,
   subagentListRequestSchema,
   subagentPromptRequestSchema,
+  subagentControlRequestSchema,
+  subagentStatusRequestSchema,
 } from '../api/subagents.schema.ts'
 
 /**
@@ -104,6 +106,8 @@ const UNARY_ROUTES: UnaryRoutes = {
   'subagent.history': { schema: subagentHistoryRequestSchema, invoke: (api, r, signal) => api.subagents.history(r, signal) },
   'subagent.prompt': { schema: subagentPromptRequestSchema, invoke: (api, r, signal) => api.subagents.prompt(r, signal) },
   'subagent.interrupt': { schema: subagentInterruptRequestSchema, invoke: (api, r) => api.subagents.interrupt(r) },
+  'subagent.control': { schema: subagentControlRequestSchema, invoke: (api, r, signal) => api.subagents.control(r, signal) },
+  'subagent.status': { schema: subagentStatusRequestSchema, invoke: (api, r, signal) => api.subagents.status(r, signal) },
   'host.describe': { schema: hostDescribeRequestSchema, invoke: (api, r) => api.host.describe(r) },
   'host.pickDirectory': { schema: hostPickDirectoryRequestSchema, invoke: (api, r, signal) => api.host.pickDirectory(r, signal) },
   'host.listDirectory': { schema: hostListDirectoryRequestSchema, invoke: (api, r, signal) => api.host.listDirectory(r, signal) },

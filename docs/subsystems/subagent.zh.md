@@ -4,9 +4,11 @@
 
 subagent seam 让一个 agent（智能体）将工作委派给子 agent。与 [bash](shell.zh.md) 一样，它是**一项可选能力**，不属于 agent loop（智能体循环），因此其类型定义在此而非 [core.md](core.zh.md) 中。它不同于其他能力 seam，因为**同一上下文中可共存多个提供方实现**，并按名称注册（`ctx.subagents`），而 bash 只允许一个执行器。该注册表遵循 [LLM（大语言模型）适配器注册表](llm-streaming.zh.md)，而非单服务的 bash 执行器。
 
-Service Definition：[dsh-subagent](../../packages/subagent/subagent)（`ctx.subagents` + 下文词汇）。Service Provider 是六个兄弟包：`dsh-subagent-spawn-in-process`、`-fork`、`-acp`、`-codex`、`-claude-code`、`-dsh-sdk`；面向模型的 Consumer 包括 [dsh-tool-subagent](../../packages/subagent/tool-subagent)（按提供方委派）、[dsh-tool-subagent-control](../../packages/subagent/tool-subagent-control)（可选的全局 `send_message`、`interrupt_agent` 与 `list_agents` 控制工具）和 [dsh-tool-subagent-report](../../packages/subagent/tool-subagent-report)（可选的 child 作用域 `report` 返回通道）。同一个 `ctx.subagents` 服务通过内部激活管理器负责可继续子 agent 编排，并直接基于会话存储和可选的会话持久化提供只读的 child 与后代发现。产品提供方设计理由见 [Codex 与 Claude Code Agent Note](../../.agents/notes/implemented/feature/2026-08-04-claude-code-and-codex-subagent-backends.zh.md)；通用 seam 的设计理由见 [subagent Agent Note](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.zh.md)、[可继续 subagent Agent Note](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.zh.md)、[report 工具 Agent Note](../../.agents/notes/implemented/feature/2026-07-30-continuable-subagent-report-tool.zh.md)、[持久化目录 Agent Note](../../.agents/notes/implemented/feature/2026-07-22-durable-subagent-catalog-and-list-agents.zh.md)、[列表身份投影 Agent Note](../../.agents/notes/implemented/architecture/2026-08-06-subagent-list-identity-projection.zh.md)和[服务合并 Agent Note](../../.agents/notes/implemented/simplification/2026-07-26-merge-subagent-control-service.zh.md)。
+Service Definition：[dsh-subagent](../../packages/subagent/subagent)（`ctx.subagents` + 下文词汇）。Service Provider 是六个兄弟包：`dsh-subagent-spawn-in-process`、`-fork`、`-acp`、`-codex`、`-claude-code`、`-dsh-sdk`；面向模型的 Consumer 包括 [dsh-tool-subagent](../../packages/subagent/tool-subagent)（按提供方委派）、[dsh-tool-subagent-control](../../packages/subagent/tool-subagent-control)（可选的全局 `send_message`、`followup_task`、`steer_agent`、`interrupt_agent`、`close_agent`、`get_agent_status` 与 `list_agents` 控制工具）和 [dsh-tool-subagent-report](../../packages/subagent/tool-subagent-report)（可选的 child 作用域 `report` 返回通道）。同一个 `ctx.subagents` 服务通过内部激活管理器负责可继续子 agent 编排，并直接基于会话存储和可选的会话持久化提供只读的 child 与后代发现。产品提供方设计理由见 [Codex 与 Claude Code Agent Note](../../.agents/notes/implemented/feature/2026-08-04-claude-code-and-codex-subagent-backends.zh.md)；通用 seam 的设计理由见 [subagent Agent Note](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.zh.md)、[可继续 subagent Agent Note](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.zh.md)、[report 工具 Agent Note](../../.agents/notes/implemented/feature/2026-07-30-continuable-subagent-report-tool.zh.md)、[持久化目录 Agent Note](../../.agents/notes/implemented/feature/2026-07-22-durable-subagent-catalog-and-list-agents.zh.md)、[列表身份投影 Agent Note](../../.agents/notes/implemented/architecture/2026-08-06-subagent-list-identity-projection.zh.md)和[服务合并 Agent Note](../../.agents/notes/implemented/simplification/2026-07-26-merge-subagent-control-service.zh.md)。
 
 源码：[`packages/subagent/subagent/src/types.ts`](../../packages/subagent/subagent/src/types.ts)、[`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)和 [`packages/subagent/subagent/src/continuation.ts`](../../packages/subagent/subagent/src/continuation.ts)
+
+`wait_agent` 是 `dsh-tool-subagent-control` 提供的根作用域协调工具。它等待当前智能体收件箱的新消息，不查询子智能体状态、不消费消息，也不声明静态工具超时；工具完成后，消息只会在下一轮循环开始时被领取，因此智能体必须先结束当前 step，再使用结果。
 
 ## 两类能力，两种发现方式
 
@@ -139,7 +141,7 @@ Agent 收件箱是唯一的队列。每条继续执行消息都会成为一个 `
 
 后续操作的权限来自确切的在线 Agent 工具上下文。已认证的 Agent 必须是持久化子 agent 在 `SessionHeader.parentSession` 中记录的直接父级。`MessageSource` 与 `senderSessionId` 记录谁提供了已准入的消息，但不授予任何权限；可选的面向模型工具使用 `CoordinatorMessageSource`。
 
-对于这两种操作，调用方 signal 仅在收件箱接受之前掌管查找、物化与准入。此后管理器独立掌管该 Activation：之后的调用方取消既不会取消已接受的轮次，也不会 dispose 子 agent，并且该 seam 不对外暴露任何 steering（中途引导）操作。
+对于 queue、follow-up 和 steering，调用方 signal 仅在收件箱接受之前掌管查找、物化与准入。此后管理器独立掌管该 Activation：之后的调用方取消既不会取消已接受的轮次，也不会 dispose 子 agent。queue 不会唤醒停驻的 child，follow-up 会唤醒它执行后续 FIFO 轮次，steering 会在下一安全 step 投递纠偏上下文；它们都不会改写已经领取的工作。
 
 `SubagentRuntime.interrupt(targetSessionId, authority)` 是唯一的公开停止操作：它同步完成鉴权，对在线目标发出 `Agent.cancel(cause, { keepInbox: true })`，然后不等待完全停稳即返回。Activation、其尚未领取的待处理 inbox 工作与已发布的后代均不受影响；已被领取进入中断轮次的工作不会重新入队。被中断的 driver 进入 idle 后，一次唤醒发送会恢复被暂停的 FIFO 队列。不存在的目标——未知、一次性或已结算——以及未绑定管理器的组合是被接受的 no-op。对在线目标，错误的 parent 地址或不在其在线祖先链中的调用方会以 `UNAUTHORIZED` 拒绝；陈旧的 ancestor 对象和指向自身的 ancestor 请求会在查找目标前拒绝。
 
@@ -515,11 +517,52 @@ async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>
  * @param content - user-role content to deliver.
  * @param options - the message source fields and caller cancellation, which stops the
  *   operation only before inbox acceptance.
- * @returns the accepted message's inbox id.
+ * @returns the accepted control request receipt.
  * @throws when continuation services are unavailable, parent authority is
  *   rejected, or the message was not admitted.
  */
-async followup( parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions, ): Promise<MessageId>
+async followup( parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions, ): Promise<SubagentControlResult>
+
+/**
+ * Queue content without waking the child driver.
+ * @param parent - exact live direct parent.
+ * @param childId - durable continuable child id.
+ * @param content - user content to enqueue.
+ * @param options - source and cancellation signal.
+ * @returns acceptance receipt.
+ * @throws when authority or admission is rejected.
+ */
+async queue(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentQueueOptions): Promise<SubagentControlResult>
+
+/**
+ * Wake a child and deliver content at the next safe step.
+ * @param parent - exact live direct parent.
+ * @param childId - durable child id.
+ * @param content - steering content.
+ * @param options - source and cancellation signal.
+ * @returns acceptance receipt.
+ * @throws when authority or admission is rejected.
+ */
+async steer(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentSteerOptions): Promise<SubagentControlResult>
+
+/**
+ * Close one child subtree under explicit authority.
+ * @param childId - durable child id.
+ * @param authority - direct-parent or cascading ancestor authority.
+ * @param options - optional cascade policy.
+ * @returns the shared close result.
+ * @throws when authority is stale or unauthorized.
+ */
+async close(childId: SessionId, authority: SubagentCloseAuthority, options?: SubagentCloseOptions): Promise<SubagentCloseResult>
+
+/**
+ * Query one authorized child status snapshot.
+ * @param parent - exact live ancestor.
+ * @param childId - durable child id.
+ * @returns current status snapshot.
+ * @throws when the child is unknown or outside the caller lineage.
+ */
+async status(parent: Agent, childId: SessionId): Promise<SubagentStatusSnapshot>
 
 /**
  * Interrupt one live continuable child's current turn under a human parent
@@ -533,10 +576,11 @@ async followup( parent: Agent, childId: SessionId, content: ContentBlock[], opti
  * live Activation.
  * @param targetSessionId - the durable child session id to interrupt.
  * @param authority - the human parent address or exact live ancestor Agent.
+ * @returns acceptance receipt with the target's previous state when known.
  * @throws {SubagentError} `UNAUTHORIZED` when the authority does not own the
  *   live target.
  */
-interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void
+interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): SubagentControlResult
 
 /**
  * Deliver selected content from one live continuable child to its durable

@@ -2687,7 +2687,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }, signal)
         if (verified.error !== undefined) return err(request, verified.error)
         try {
-          const messageId = await ctx.subagents.followup(parent, childSessionId, content, {
+          const receipt = await ctx.subagents.followup(parent, childSessionId, content, {
             source: {
               kind: 'user',
               rpcId: request.rpcId,
@@ -2695,7 +2695,11 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             },
             signal,
           })
-          return ok(request, { messageId })
+          if (typeof receipt === 'string') return ok(request, { messageId: receipt as unknown as import('@deepseek-ai/dsh-llm/brand').MessageId })
+          if (!receipt.accepted || receipt.messageId === undefined) {
+            throw new Error(`subagent "${childSessionId}" did not accept the prompt`)
+          }
+          return ok(request, { messageId: receipt.messageId })
         } catch (error: unknown) {
           return subagentPromptError(request, error, signal)
         }
@@ -2724,6 +2728,39 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           }))
         }
         return Promise.resolve(ok(request, { accepted: true as const }))
+      },
+
+      async control(request, requestSignal) {
+        const { parentSessionId, childSessionId, action, message, cascade } = request.payload
+        const parent = ctx.agents.get(parentSessionId)
+        if (parent === undefined) return err(request, { code: 'subagent-parent-unavailable', message: 'parent is not live', details: { parentSessionId } })
+        const content = message === undefined ? [] : [{ type: 'text' as const, text: message }]
+        try {
+          const signal = requestSignal ?? new AbortController().signal
+          if (action === 'interrupt') return ok(request, ctx.subagents.interrupt(childSessionId, { kind: 'ancestor', agent: parent }))
+          if (action === 'close') {
+            const authority = cascade ? { kind: 'ancestor' as const, agent: parent, cascade: true as const } : { kind: 'direct-parent' as const, agent: parent }
+            return ok(request, await ctx.subagents.close(childSessionId, authority, { cascade: cascade === true }))
+          }
+          const result = action === 'queue'
+            ? await ctx.subagents.queue(parent, childSessionId, content, { source: { kind: 'user', rpcId: request.rpcId }, signal })
+            : action === 'steer'
+              ? await ctx.subagents.steer(parent, childSessionId, content, { source: { kind: 'user', rpcId: request.rpcId }, signal })
+              : await ctx.subagents.followup(parent, childSessionId, content, { source: { kind: 'user', rpcId: request.rpcId }, signal })
+          return ok(request, result)
+        } catch {
+          return err(request, { code: 'internal', message: 'subagent control failed', details: {} })
+        }
+      },
+
+      async status(request) {
+        const parent = ctx.agents.get(request.payload.parentSessionId)
+        if (parent === undefined) return err(request, { code: 'subagent-parent-unavailable', message: 'parent is not live', details: { parentSessionId: request.payload.parentSessionId } })
+        try {
+          return ok(request, await ctx.subagents.status(parent, request.payload.childSessionId))
+        } catch {
+          return err(request, { code: 'internal', message: 'subagent status failed', details: {} })
+        }
       },
     },
 

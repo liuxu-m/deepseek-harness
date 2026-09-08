@@ -66,6 +66,8 @@ import {
   subagentInterruptValueSchema,
   subagentListValueSchema,
   subagentPromptValueSchema,
+  subagentControlValueSchema,
+  subagentStatusValueSchema,
 } from '../api/subagents.schema.ts'
 
 /**
@@ -104,6 +106,8 @@ export interface IApiClient {
     history(payload: RequestPayload<'subagent.history'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'subagent.history'>>>
     prompt(payload: RequestPayload<'subagent.prompt'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'subagent.prompt'>>>
     interrupt(payload: RequestPayload<'subagent.interrupt'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'subagent.interrupt'>>>
+    control(payload: RequestPayload<'subagent.control'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'subagent.control'>>>
+    status(payload: RequestPayload<'subagent.status'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'subagent.status'>>>
   }
   host: {
     describe(payload: RequestPayload<'host.describe'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.describe'>>>
@@ -186,6 +190,8 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'subagent.history': subagentHistoryValueSchema,
   'subagent.prompt': subagentPromptValueSchema,
   'subagent.interrupt': subagentInterruptValueSchema,
+  'subagent.control': subagentControlValueSchema,
+  'subagent.status': subagentStatusValueSchema,
   'host.describe': hostDescribeValueSchema,
   'host.pickDirectory': hostPickDirectoryValueSchema,
   'host.listDirectory': hostListDirectoryValueSchema,
@@ -429,6 +435,8 @@ export abstract class AbstractApiClient implements IApiClient {
     history: (payload, signal) => this.callUnary('subagent.history', payload, signal),
     prompt: (payload, signal) => this.callUnary('subagent.prompt', payload, signal),
     interrupt: (payload, signal) => this.callUnary('subagent.interrupt', payload, signal),
+    control: (payload, signal) => this.callUnary('subagent.control', payload, signal),
+    status: (payload, signal) => this.callUnary('subagent.status', payload, signal),
   }
 
   readonly host: IApiClient['host'] = {

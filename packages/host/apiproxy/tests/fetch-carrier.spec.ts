@@ -133,6 +133,12 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
           result: { ok: true, value: { messageId: 'message-1' as never } },
         }
       },
+      async control(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: {} as never } }
+      },
+      async status(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: {} as never } }
+      },
       async interrupt(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { accepted: true as const } } }
       },

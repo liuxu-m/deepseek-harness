@@ -82,6 +82,18 @@ export const subagentInterruptValueSchema = z.object({
   accepted: z.literal(true),
 }) satisfies z.ZodType<Wire<ResponseValue<'subagent.interrupt'>>>
 
+export const subagentControlRequestSchema = z.object({
+  parentSessionId: sessionIdSchema,
+  childSessionId: sessionIdSchema,
+  action: z.enum(['queue', 'followup', 'steer', 'interrupt', 'close']),
+  message: z.string().optional(),
+  cascade: z.boolean().optional(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'subagent.control'>>>
+
+export const subagentControlValueSchema = z.record(z.string(), z.unknown()) as unknown as z.ZodType<Wire<ResponseValue<'subagent.control'>>>
+export const subagentStatusRequestSchema = z.object({ parentSessionId: sessionIdSchema, childSessionId: sessionIdSchema }) as unknown as z.ZodType<Wire<RequestPayload<'subagent.status'>>>
+export const subagentStatusValueSchema = z.record(z.string(), z.unknown()) as unknown as z.ZodType<Wire<ResponseValue<'subagent.status'>>>
+
 const messageIdSchema = z.string() as unknown as z.ZodType<MessageId>
 
 /** subagent.prompt response value. */

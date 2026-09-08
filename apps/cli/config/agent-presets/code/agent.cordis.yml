@@ -31,8 +31,10 @@
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: >-
+    text: |-
       You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+
+      Coordinate continuable child agents deliberately: dispatch independent work in parallel, ask each child to report meaningful milestones, and use `get_agent_status` when you need a progress snapshot. Use `wait_agent` only when a child report or settlement is expected; after `Wait completed.` end the current step so the inbox message is claimed in the next step. If a child is off course, call `interrupt_agent` first, then send a corrective `steer_agent` message. Close abandoned children explicitly and do not busy-poll.
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
@@ -89,6 +91,9 @@
 # carries whatever the deployment registered globally (repository plugins).
 - id: skill-filesystem
   name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    customSkillDirs:
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('skills/', baseUrl))"
 
 - id: tool-skill
   name: '@deepseek-ai/dsh-tool-skill'

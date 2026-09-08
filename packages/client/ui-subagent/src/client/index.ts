@@ -56,6 +56,12 @@ export function apply(ctx: ClientContext): void {
     setCatalogOpen(parentSessionId: SessionId, open: boolean) {
       sessions.setSubagentCatalogOpen(parentSessionId, open)
     },
+    controlSubagent(parentSessionId: SessionId, agentId: SessionId, action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close') {
+      return sessions.controlSubagent?.(parentSessionId, agentId, action) ?? Promise.reject(new Error('subagent control unavailable'))
+    },
+    getSubagentStatus(parentSessionId: SessionId, agentId: SessionId) {
+      return sessions.getSubagentStatus?.(parentSessionId, agentId) ?? Promise.reject(new Error('subagent status unavailable'))
+    },
   })
   ctx.slots.inject(
     'conversation.session.header.lineage',

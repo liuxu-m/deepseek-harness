@@ -85,6 +85,7 @@ const PRODUCT_SUBAGENT_RESULT_DIAGNOSTIC_CONFIG = fileURLToPath(
   new URL('../subagent-result-diagnostic.cordis.yml', import.meta.url),
 )
 const FS_DIFF_BOUND_CONFIG = fileURLToPath(new URL('./fs-diff-bound.cordis.yml', import.meta.url))
+const CODE_MODE_PARENT_CHILD_CONTROL_CONFIG = fileURLToPath(new URL('../code-mode-parent-child-control.cordis.yml', import.meta.url))
 const SNAPSHOTS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'snapshots')
 const PACKED_CHUNKS_SOURCE = 'hook-cc-pretool-deny'
 
@@ -139,6 +140,14 @@ function fixtureText(name: string): string {
 
 function fixtureRecords(name: string): unknown[] {
   return fixtureText(name)
+    .trimEnd()
+    .split('\n')
+    .map(line => JSON.parse(line) as unknown)
+}
+
+/** Read one recorded child session fixture. */
+function childFixtureRecords(name: string, child: number): unknown[] {
+  return readFileSync(join(SNAPSHOTS_DIR, name, `session.${child}.jsonl`), 'utf8')
     .trimEnd()
     .split('\n')
     .map(line => JSON.parse(line) as unknown)
@@ -613,6 +622,16 @@ const SCENARIOS: Scenario[] = [
   // tool/code-dispatch events. Each overlay composes and pins its own header class.
   { name: 'code-mode-turn', hasModelTurn: true, recorded: true, pinsHeader: true, headerClass: 'code', configPath: CODE_MODE_CONFIG },
   {
+    name: 'code-mode-parent-child-control',
+    hasModelTurn: true,
+    recorded: false,
+    pinsHeader: true,
+    headerClass: 'code-parent-child-control',
+    configPath: CODE_MODE_PARENT_CHILD_CONTROL_CONFIG,
+    pinsChildToolSchemas: [1, 2],
+    pinsChildSystemPrompts: [1, 2],
+  },
+  {
     name: 'code-mode-read-image',
     hasModelTurn: true,
     recorded: false,
@@ -693,6 +712,48 @@ const SCENARIOS: Scenario[] = [
 // stay guarded); the probe follows the executor's own resolution so a Windows
 // host with only an install-location pwsh still runs the scenario.
 const hasPwsh = spawnSync(resolvePwshPath(), ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '$true'], { encoding: 'utf8' }).status === 0
+
+it('replays parent code dispatch and child lifecycle controls', () => {
+  const parent = fixtureRecords('code-mode-parent-child-control') as Array<{
+    type?: unknown
+    data?: { name?: unknown }
+  }>
+  const child = childFixtureRecords('code-mode-parent-child-control', 1) as Array<{
+    type?: unknown
+    data?: { name?: unknown; state?: unknown }
+  }>
+  const failedChild = childFixtureRecords('code-mode-parent-child-control', 2) as Array<{
+    type?: unknown
+    data?: { name?: unknown; state?: unknown }
+  }>
+
+  expect(parent.some(event => event.type === 'tool/call' && event.data?.name === 'run_code')).toBe(true)
+  expect(parent.filter(event => event.type === 'tool/code-dispatch').map(event => event.data?.name)).toEqual([
+    'subagent',
+    'wait_agent',
+    'subagent',
+    'list_agents',
+    'get_agent_status',
+    'get_agent_status',
+    'steer_agent',
+    'interrupt_agent',
+    'close_agent',
+  ])
+  expect(parent.some(event => event.type === 'agent/inbox/spliced'
+    && JSON.stringify(event).includes('CONTROL_REPORT'))).toBe(true)
+  expect(parent.filter(event => event.type === 'agent/inbox/spliced'
+    && JSON.stringify(event).includes('was stopped before it finished'))).toHaveLength(1)
+  expect(parent.some(event => event.type === 'agent/inbox/spliced'
+    && JSON.stringify(event).includes('CONTROL_CHILD_ERROR'))).toBe(true)
+  expect(child.some(event => event.type === 'subagent/descriptor')).toBe(true)
+  expect(child.some(event => event.type === 'tool/code-dispatch' && event.data?.name === 'report')).toBe(true)
+  expect(child.some(event => event.type === 'subagent/progress')).toBe(true)
+  expect(child.filter(event => event.type === 'subagent/progress')).not.toHaveLength(0)
+  expect(failedChild.some(event => event.type === 'subagent/descriptor')).toBe(true)
+  expect(failedChild.some(event => (event.type === 'tool/code-dispatch' || event.type === 'tool/call')
+    && event.data?.name === 'run_code')).toBe(true)
+  expect(failedChild.some(event => event.type === 'subagent/progress')).toBe(true)
+})
 
 defineAcpSnapshotSuite({
   agent: AGENT,

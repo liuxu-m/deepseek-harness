@@ -381,6 +381,28 @@ describe('normalizeSessionLog', () => {
     expect(out).toContain('"decision":"block"') // the decision is the behavior — kept
   })
 
+  it('zeroes occurredAt only for durable subagent control notifications', () => {
+    const events = [
+      'subagent/progress',
+      'subagent/steer-accepted',
+      'subagent/interrupt-requested',
+      'subagent/closed',
+      'subagent/message-accepted',
+    ].map((type, index) => JSON.stringify({
+      type,
+      seq: index + 1,
+      time: index + 1,
+      data: { occurredAt: index + 100, state: 'running' },
+    }))
+    const records = normalizeSessionLog(`${header({})}\n${events.join('\n')}\n`, ctx)
+      .trimEnd()
+      .split('\n')
+      .slice(1)
+      .map(line => JSON.parse(line) as { data: { occurredAt: number } })
+
+    expect(records.map(record => record.data.occurredAt)).toEqual([0, 0, 0, 0, 104])
+  })
+
   it('preserves a packed chunk row\'s sequence, zeroes time, and zeroes volatile dt gaps', () => {
     const row = JSON.stringify({
       type: 'text-chunks', seq0: 7, time0: 999,

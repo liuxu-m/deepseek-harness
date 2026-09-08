@@ -10,6 +10,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentService from '@deepseek-ai/dsh-subagent'
+import { SubagentControlRequestId } from '@deepseek-ai/dsh-subagent'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -1019,7 +1020,7 @@ describe('Team mailbox and waiting', () => {
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     const admitted: string[] = []
-    vi.spyOn(ctx.subagents, 'followup').mockImplementation(async (_parent, _childId, blocks) => {
+    vi.spyOn(ctx.subagents, 'followup').mockImplementation(async (_parent, childId, blocks) => {
       const last = blocks.at(-1)
       const text = last?.type === 'text' ? last.text : ''
       admitted.push(text)
@@ -1027,7 +1028,8 @@ describe('Team mailbox and waiting', () => {
         entered.resolve(undefined)
         await release.promise
       }
-      return createUserMessage({ content: blocks, source: { kind: 'user' } }).id
+      const messageId = createUserMessage({ content: blocks, source: { kind: 'user' } }).id
+      return { requestId: SubagentControlRequestId(`request-${text}`), agentId: childId, accepted: true, messageId }
     })
 
     const first = ctx.agentTeams.sendMessage(lead, {

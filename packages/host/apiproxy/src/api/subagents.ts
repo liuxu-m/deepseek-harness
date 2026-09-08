@@ -8,6 +8,7 @@ import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RpcRequest, RpcResponse } from './rpc.ts'
+import type { SubagentStatusSnapshot } from '@deepseek-ai/dsh-subagent'
 import type { HistoryEntry, SessionProjectionsBlock } from './sessions.ts'
 
 /** Complete durable direct-child catalog row. */
@@ -43,6 +44,21 @@ export interface SubagentPromptReceipt {
 /** Uniform acknowledgement that one interrupt request was admitted. */
 export interface SubagentInterruptReceipt {
   accepted: true
+}
+export interface SubagentControlParams {
+  parentSessionId: SessionId
+  childSessionId: SessionId
+  action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close'
+  message?: string
+  cascade?: boolean
+}
+export interface SubagentControlReceipt {
+  requestId: string
+  agentId: SessionId
+  accepted: boolean
+  messageId?: MessageId
+  noOp?: boolean
+  closedAgentIds?: SessionId[]
 }
 
 /** Durable parent/child address that selects subagent transport in the client. */
@@ -117,4 +133,10 @@ export interface SubagentsApi {
   interrupt(
     request: RpcRequest<Extract<SubagentAddress, { mode: 'continuable' }>>,
   ): Promise<RpcResponse<SubagentInterruptReceipt>>
+  control(
+    request: RpcRequest<SubagentControlParams>, signal?: AbortSignal,
+  ): Promise<RpcResponse<SubagentControlReceipt>>
+  status(
+    request: RpcRequest<{ parentSessionId: SessionId; childSessionId: SessionId }>, signal?: AbortSignal,
+  ): Promise<RpcResponse<SubagentStatusSnapshot>>
 }

@@ -33,7 +33,7 @@ import { createScope, scopeOf as scopeTagOf } from '../agents/scope.ts'
 import type { ConversationRuntime } from './conversation-assembler.ts'
 import { SessionManager } from './manager.ts'
 import type { SessionRemotes } from './remotes.ts'
-import type { SessionListPhase, SessionSearchResultItem, SubagentCatalogSnapshot } from './manager.ts'
+import type { SessionListPhase, SessionSearchResultItem, SubagentCatalogSnapshot, SubagentStatusSnapshot } from './manager.ts'
 import type { PendingInteractionStatus } from './pending.ts'
 import { SessionProvideChannel } from './provide.ts'
 import type { Session } from './session.ts'
@@ -406,6 +406,27 @@ export class SessionRuntime implements ISessions {
    */
   refreshSubagents(parentSessionId: SessionId): Promise<void> {
     return this.manager.refreshSubagents(parentSessionId)
+  }
+
+  /** Send a confirmed control request to a child. */
+  controlSubagent(
+    parentSessionId: SessionId,
+    agentId: SessionId,
+    action: 'queue' | 'followup' | 'steer' | 'interrupt' | 'close',
+    message?: string,
+    cascade = false,
+  ): Promise<RpcResult<unknown>> {
+    return this.manager.controlSubagent(parentSessionId, agentId, action, message, cascade)
+  }
+
+  /** Query a child status from the host and refresh the local cache. */
+  getSubagentStatus(parentSessionId: SessionId, agentId: SessionId): Promise<RpcResult<SubagentStatusSnapshot>> {
+    return this.manager.getSubagentStatus(parentSessionId, agentId)
+  }
+
+  /** Return the last server-confirmed child status. */
+  subagentStatus(agentId: SessionId): SubagentStatusSnapshot | undefined {
+    return this.manager.subagentStatus(agentId)
   }
 
   noteAgentPreset(sessionId: SessionId, agentPreset: string): void {

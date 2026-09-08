@@ -8,9 +8,11 @@ The child-scoped `tool:report` prompt section instructs the child to call `repor
 
 `reportDelivery` selects parent scheduling for every accepted report. `next-step` (the default) uses `parent.steer()`: a running parent receives the report at its nearest safe step boundary, while an idle parent starts a turn. Reports accepted in sequence share the next-step FIFO, including the later manager-authored settlement notice, so the parent cannot observe settlement before an earlier report; reports waiting together enter one claimed batch. `quiet` uses `parent.inject()`, adding the same next-step context without waking a parked parent. This is deployment scheduling policy, so the model-facing schema cannot select or override it per call.
 
+The framed parent message is durable and is the source for a `subagent.report` SDK/UI notification. Progress and control notifications remain separate observations: a report is selected child content, while those notifications expose lifecycle state and accepted control requests. The report channel never streams a child transcript or creates a delivery receipt.
+
 Scope-local registration deliberately survives the child's global `toolFilter`, so a delegation allow-list cannot remove the only return channel. A deployment that requires a child with no return channel omits this package.
 
-The contribution body is exported as `installReportTool(childCtx, ctx, delivery)` so inspection consumers can install `report` and its guidance into a minted child scope, and returns the one disposer revoking both. The generated tool catalog uses that path because the global registry cannot expose a scope-local schema. Production composition still enters through `apply()`; the subagent seam's contribution registry remains private.
+The contribution body is exported as `installReportTool(childCtx, ctx, delivery, maxReportBytes)` so inspection consumers can install `report` and its guidance into a minted child scope, with a default UTF-8 limit of 16,384 bytes, and returns the one disposer revoking both. The generated tool catalog uses that path because the global registry cannot expose a scope-local schema. Production composition still enters through `apply()`; the subagent seam's contribution registry remains private.
 
 ## Model Experience
 
@@ -50,7 +52,7 @@ One user-role parent message framed as `Background subagent <child-id> reported:
 
 #### Token effect
 
-The child's complete `output` plus the one-line frame, uncapped by this package.
+The child's complete `output` plus the one-line frame, limited by the configured `maxReportBytes` UTF-8 budget.
 
 #### KV Cache effect
 

@@ -4,9 +4,11 @@ English | [中文](subagent.zh.md)
 
 The subagent seam lets an agent delegate work to a child agent. Like [bash](shell.md), it is **one optional capability**, not part of the agent loop, so its types live here rather than in [core.md](core.md). It differs from the other capability seams because **multiple provider implementations coexist** in one context, registered by name (`ctx.subagents`), while bash allows only one executor. Its registry follows the [LLM adapter registry](llm-streaming.md), not the single-service bash executor.
 
-Service Definition: [dsh-subagent](../../packages/subagent/subagent) (`ctx.subagents` + the vocabulary below). Service Providers are sibling packages (`dsh-subagent-spawn-in-process`, `-fork`, `-acp`, `-codex`, `-claude-code`, `-dsh-sdk`); the model-facing Consumers are [dsh-tool-subagent](../../packages/subagent/tool-subagent) (per-provider delegation), [dsh-tool-subagent-control](../../packages/subagent/tool-subagent-control) (the optional global `send_message`, `interrupt_agent`, and `list_agents` controls), and [dsh-tool-subagent-report](../../packages/subagent/tool-subagent-report) (the optional child-scoped `report` return channel). The same `ctx.subagents` service owns continuable-child orchestration through an internal activation manager and read-only child and descendant discovery straight from the session store and optional session persistence. Product-provider rationale lives in [the Codex and Claude Code Agent Note](../../.agents/notes/implemented/feature/2026-08-04-claude-code-and-codex-subagent-backends.md); common-seam rationale lives in [the subagent Agent Note](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.md), [the continuable subagents Agent Note](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.md), [the report-tool Agent Note](../../.agents/notes/implemented/feature/2026-07-30-continuable-subagent-report-tool.md), [the durable catalog Agent Note](../../.agents/notes/implemented/feature/2026-07-22-durable-subagent-catalog-and-list-agents.md), [the list-identity-projection Agent Note](../../.agents/notes/implemented/architecture/2026-08-06-subagent-list-identity-projection.md), and [the merged-service Agent Note](../../.agents/notes/implemented/simplification/2026-07-26-merge-subagent-control-service.md).
+Service Definition: [dsh-subagent](../../packages/subagent/subagent) (`ctx.subagents` + the vocabulary below). Service Providers are sibling packages (`dsh-subagent-spawn-in-process`, `-fork`, `-acp`, `-codex`, `-claude-code`, `-dsh-sdk`); the model-facing Consumers are [dsh-tool-subagent](../../packages/subagent/tool-subagent) (per-provider delegation), [dsh-tool-subagent-control](../../packages/subagent/tool-subagent-control) (the optional global `send_message`, `followup_task`, `steer_agent`, `interrupt_agent`, `close_agent`, `get_agent_status`, and `list_agents` controls), and [dsh-tool-subagent-report](../../packages/subagent/tool-subagent-report) (the optional child-scoped `report` return channel). The same `ctx.subagents` service owns continuable-child orchestration through an internal activation manager and read-only child and descendant discovery straight from the session store and optional session persistence. Product-provider rationale lives in [the Codex and Claude Code Agent Note](../../.agents/notes/implemented/feature/2026-08-04-claude-code-and-codex-subagent-backends.md); common-seam rationale lives in [the subagent Agent Note](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.md), [the continuable subagents Agent Note](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.md), [the report-tool Agent Note](../../.agents/notes/implemented/feature/2026-07-30-continuable-subagent-report-tool.md), [the durable catalog Agent Note](../../.agents/notes/implemented/feature/2026-07-22-durable-subagent-catalog-and-list-agents.md), [the list-identity-projection Agent Note](../../.agents/notes/implemented/architecture/2026-08-06-subagent-list-identity-projection.md), and [the merged-service Agent Note](../../.agents/notes/implemented/simplification/2026-07-26-merge-subagent-control-service.md).
 
 Sources: [`packages/subagent/subagent/src/types.ts`](../../packages/subagent/subagent/src/types.ts), [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts), and [`packages/subagent/subagent/src/continuation.ts`](../../packages/subagent/subagent/src/continuation.ts)
+
+`wait_agent` is a root-scoped coordination tool from `dsh-tool-subagent-control`. It waits for new messages in the calling agent's inbox; it does not inspect child state, consume the message, or declare a static tool deadline. Its completion only makes the next loop step claim the message, so the agent must end the current step before using the result.
 
 ## Two kinds of capability, discovered two ways
 
@@ -139,7 +141,7 @@ The Agent inbox is the only queue. Every continuation message becomes one `Agent
 
 Follow-up authority comes from an exact live Agent tool context. The authenticated Agent must be the durable child's direct parent recorded in `SessionHeader.parentSession`. `MessageSource` and `senderSessionId` record who supplied an admitted message but grant no authority; the optional model-facing tool uses `CoordinatorMessageSource`.
 
-For both operations the caller signal owns lookup, materialization, and admission only until inbox acceptance. Afterwards the manager owns the Activation independently: later caller cancellation neither cancels the accepted turn nor disposes the child, and the seam exposes no steering operation.
+For queue, follow-up, and steering, the caller signal owns lookup, materialization, and admission only until inbox acceptance. Afterwards the manager owns the Activation independently: later caller cancellation neither cancels the accepted turn nor disposes the child. Queue leaves a parked child asleep, follow-up wakes it for a later FIFO turn, and steering delivers corrective context at the next safe step; none rewrites work already claimed.
 
 `SubagentRuntime.interrupt(targetSessionId, authority)` is the one public stop: it authorizes synchronously, issues `Agent.cancel(cause, { keepInbox: true })` on the live target, and returns without awaiting quiescence. The Activation, its unclaimed pending inbox work, and published descendants are untouched; work already claimed into the interrupted turn is not requeued. Once the interrupted driver is idle, a waking send resumes the parked FIFO queue. An absent target — unknown, one-shot, or already settled — and a manager-less composition are accepted no-ops. For a live target, a mismatched parent address or caller outside its live ancestry rejects with `UNAUTHORIZED`; stale ancestor objects and self-targeting ancestor requests reject before target lookup.
 
@@ -511,11 +513,52 @@ async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>
  * @param content - user-role content to deliver.
  * @param options - the message source fields and caller cancellation, which stops the
  *   operation only before inbox acceptance.
- * @returns the accepted message's inbox id.
+ * @returns the accepted control request receipt.
  * @throws when continuation services are unavailable, parent authority is
  *   rejected, or the message was not admitted.
  */
-async followup( parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions, ): Promise<MessageId>
+async followup( parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions, ): Promise<SubagentControlResult>
+
+/**
+ * Queue content without waking the child driver.
+ * @param parent - exact live direct parent.
+ * @param childId - durable continuable child id.
+ * @param content - user content to enqueue.
+ * @param options - source and cancellation signal.
+ * @returns acceptance receipt.
+ * @throws when authority or admission is rejected.
+ */
+async queue(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentQueueOptions): Promise<SubagentControlResult>
+
+/**
+ * Wake a child and deliver content at the next safe step.
+ * @param parent - exact live direct parent.
+ * @param childId - durable child id.
+ * @param content - steering content.
+ * @param options - source and cancellation signal.
+ * @returns acceptance receipt.
+ * @throws when authority or admission is rejected.
+ */
+async steer(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentSteerOptions): Promise<SubagentControlResult>
+
+/**
+ * Close one child subtree under explicit authority.
+ * @param childId - durable child id.
+ * @param authority - direct-parent or cascading ancestor authority.
+ * @param options - optional cascade policy.
+ * @returns the shared close result.
+ * @throws when authority is stale or unauthorized.
+ */
+async close(childId: SessionId, authority: SubagentCloseAuthority, options?: SubagentCloseOptions): Promise<SubagentCloseResult>
+
+/**
+ * Query one authorized child status snapshot.
+ * @param parent - exact live ancestor.
+ * @param childId - durable child id.
+ * @returns current status snapshot.
+ * @throws when the child is unknown or outside the caller lineage.
+ */
+async status(parent: Agent, childId: SessionId): Promise<SubagentStatusSnapshot>
 
 /**
  * Interrupt one live continuable child's current turn under a human parent
@@ -529,10 +572,11 @@ async followup( parent: Agent, childId: SessionId, content: ContentBlock[], opti
  * live Activation.
  * @param targetSessionId - the durable child session id to interrupt.
  * @param authority - the human parent address or exact live ancestor Agent.
+ * @returns acceptance receipt with the target's previous state when known.
  * @throws {SubagentError} `UNAUTHORIZED` when the authority does not own the
  *   live target.
  */
-interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void
+interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): SubagentControlResult
 
 /**
  * Deliver selected content from one live continuable child to its durable

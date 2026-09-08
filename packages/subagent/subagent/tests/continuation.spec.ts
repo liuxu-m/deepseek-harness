@@ -64,6 +64,7 @@ afterEach(async () => {
   if (errors.length > 1) throw new AggregateError(errors, 'temp-root cleanup failed')
 })
 
+
 /** Boot the full continuable stack: loop, persistence, providers, and subagents. */
 async function setupWith(adapter: LlmAdapter, options: { persistence?: boolean } = {}) {
   const ctx = new Context()
@@ -500,7 +501,7 @@ describe('SubagentRuntime.followup residency routing', () => {
     // Both messages queue behind the open turn, in call order.
     const firstMessage = await followup(ctx, parent, started.childId, message('first follow-up'))
     const secondMessage = await followup(ctx, parent, started.childId, message('second follow-up'))
-    expect(firstMessage).not.toBe(secondMessage)
+    expect(firstMessage.messageId).not.toBe(secondMessage.messageId)
     // Still the same Activation: no second child Agent was created.
     expect(ctx.agents.get(started.childId)).toBe(child)
 
@@ -515,8 +516,9 @@ describe('SubagentRuntime.followup residency routing', () => {
     const started = await ctx.subagents.startContinuable(startSpec(parent))
     await waitNoActivation(ctx, started.childId)
 
-    const messageId = await followup(ctx, parent, started.childId, message('continue please'))
-    expect(messageId).toBeTypeOf('string')
+    const receipt = await followup(ctx, parent, started.childId, message('continue please'))
+    expect(receipt).toMatchObject({ accepted: true, agentId: started.childId })
+    expect(receipt.messageId).toBeTypeOf('string')
     await waitNoActivation(ctx, started.childId)
 
     const loaded = await ctx.sessionPersistence.load(started.childId)
@@ -547,7 +549,7 @@ describe('SubagentRuntime.followup residency routing', () => {
     expect(ctx.subagents.getProvider('retired')).toBeUndefined()
 
     await expect(followup(ctx, parent, started.childId, message('continue without provider')))
-      .resolves.toBeTypeOf('string')
+      .resolves.toMatchObject({ accepted: true, agentId: started.childId })
     await waitNoActivation(ctx, started.childId)
     await vi.waitFor(() => { expect(ends).toHaveLength(2) })
 
@@ -685,7 +687,7 @@ describe('SubagentRuntime.followup residency routing', () => {
     const delivery = child.whenIdle().then(() =>
       followup(ctx, parent, started.childId, message('raced')))
 
-    await expect(delivery).resolves.toBeTypeOf('string')
+    await expect(delivery).resolves.toMatchObject({ accepted: true, agentId: started.childId })
     await waitNoActivation(ctx, started.childId)
     const loaded = await ctx.sessionPersistence.load(started.childId)
     expect(hasUserText(loaded.events, 'raced')).toBe(true)
@@ -867,7 +869,7 @@ describe('continuable durability and teardown', () => {
     expect(ctx.agents.get(grandchild.childId)).toBeDefined()
     expect(ctx.agents.get(sibling.childId)).toBe(siblingChild)
     await expect(followup(ctx, siblingParent, sibling.childId, message('still live')))
-      .resolves.toBeTypeOf('string')
+      .resolves.toMatchObject({ accepted: true, agentId: sibling.childId })
     await expect(ctx.subagents.startContinuable(startSpec(parent)))
       .rejects.toMatchObject({ code: 'DRAINING' })
     await expect(followup(ctx, parent, target.childId, message('too late')))
@@ -1181,7 +1183,7 @@ describe('continuable durability and teardown', () => {
     const drained = drainManager(ctx)
     hold.resolve(undefined)
 
-    await expect(delivery).resolves.toBeTypeOf('string')
+    await expect(delivery).resolves.toMatchObject({ accepted: true, agentId: started.childId })
     await drained
     expect(order).toEqual(['enqueue', 'cancel'])
   })
@@ -2232,7 +2234,6 @@ describe('continuable public API', () => {
       'kill',
       'report',
       'resume',
-      'steer',
       'steerContinuable',
       'userAuthority',
     ]) {
@@ -2685,5 +2686,32 @@ describe('SubagentRuntime.interrupt', () => {
 
     hold.resolve(undefined)
     await drained
+  })
+})
+
+describe('SubagentRuntime.close persistence', () => {
+  it('persists closed event after handle disposal with continuous sequence', async () => {
+    const hold = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([{ chunks: textResponse('done'), gate: hold.promise }])
+    const { ctx, parent } = await setupWith(adapter)
+    const started = await ctx.subagents.startContinuable(startSpec(parent))
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    const child = ctx.agents.get(started.childId)
+    if (child === undefined) throw new Error('expected a live child Agent')
+    child.ctx.on('session/event', () => {})
+    let closedNotifications = 0
+    ctx.on('session/event', (_session, event) => {
+      if (event.type === 'subagent/closed') closedNotifications += 1
+    })
+    const resultPromise = ctx.subagents.close(started.childId, { kind: 'direct-parent', agent: parent })
+    hold.resolve(undefined)
+    const result = await resultPromise
+    expect(result.accepted).toBe(true)
+    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const closed = loaded.events.filter(event => event.type === 'subagent/closed')
+    expect(closed).toHaveLength(1)
+    expect(loaded.events.map(event => event.seq)).toEqual(loaded.events.map((_event, index) => index))
+    expect(closed[0]?.type).toBe('subagent/closed')
+    expect(closedNotifications).toBe(1)
   })
 })

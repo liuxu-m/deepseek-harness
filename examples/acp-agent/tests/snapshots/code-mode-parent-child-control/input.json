@@ -1,0 +1,8 @@
+{
+  "steps": [
+    { "op": "initialize" },
+    { "op": "newSession" },
+    { "op": "prompt", "text": "Start a Reporting child in the background and wait until it reports CONTROL_REPORT before starting a second Failing child. Then inspect both children, steer the Reporting child, interrupt and close the Failing child, wait for both settlements, and reply CONTROL_DONE." },
+    { "op": "waitForTurnEnd" }
+  ]
+}

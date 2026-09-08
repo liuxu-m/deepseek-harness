@@ -1,0 +1,8 @@
+# Code-mode composition used by the deterministic parent/child control snapshot.
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./code-mode.cordis.yml
+
+- id: parent-child-control-fence
+  name: './tests/fixtures/code-mode-parent-child-control-fence.ts'

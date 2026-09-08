@@ -1785,16 +1785,45 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when continuation services are unavailable or materialization fails.'],
       },
       {
-        signature: 'async followup( parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions, ): Promise<MessageId>',
+        signature: 'async followup( parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions, ): Promise<SubagentControlResult>',
         description: 'Deliver one later message to a continuable child as its next FIFO turn. A resident child\'s Agent inbox accepts it directly (waking a `waiting` Activation), while an absent one is cold-resumed from its persisted Session. The Agent inbox is the only queue, so every accepted message has one observable order.',
         parameters: [{ name: 'parent', description: 'the exact live direct parent authorizing this delivery.' }, { name: 'childId', description: 'durable child session id.' }, { name: 'content', description: 'user-role content to deliver.' }, { name: 'options', description: 'the message source fields and caller cancellation, which stops the operation only before inbox acceptance.' }],
-        returns: 'the accepted message\'s inbox id.',
+        returns: 'the accepted control request receipt.',
         throws: ['when continuation services are unavailable, parent authority is rejected, or the message was not admitted.'],
       },
       {
-        signature: 'interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void',
+        signature: 'async queue(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentQueueOptions): Promise<SubagentControlResult>',
+        description: 'Queue content without waking the child driver.',
+        parameters: [{ name: 'parent', description: 'exact live direct parent.' }, { name: 'childId', description: 'durable continuable child id.' }, { name: 'content', description: 'user content to enqueue.' }, { name: 'options', description: 'source and cancellation signal.' }],
+        returns: 'acceptance receipt.',
+        throws: ['when authority or admission is rejected.'],
+      },
+      {
+        signature: 'async steer(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentSteerOptions): Promise<SubagentControlResult>',
+        description: 'Wake a child and deliver content at the next safe step.',
+        parameters: [{ name: 'parent', description: 'exact live direct parent.' }, { name: 'childId', description: 'durable child id.' }, { name: 'content', description: 'steering content.' }, { name: 'options', description: 'source and cancellation signal.' }],
+        returns: 'acceptance receipt.',
+        throws: ['when authority or admission is rejected.'],
+      },
+      {
+        signature: 'async close(childId: SessionId, authority: SubagentCloseAuthority, options?: SubagentCloseOptions): Promise<SubagentCloseResult>',
+        description: 'Close one child subtree under explicit authority.',
+        parameters: [{ name: 'childId', description: 'durable child id.' }, { name: 'authority', description: 'direct-parent or cascading ancestor authority.' }, { name: 'options', description: 'optional cascade policy.' }],
+        returns: 'the shared close result.',
+        throws: ['when authority is stale or unauthorized.'],
+      },
+      {
+        signature: 'async status(parent: Agent, childId: SessionId): Promise<SubagentStatusSnapshot>',
+        description: 'Query one authorized child status snapshot.',
+        parameters: [{ name: 'parent', description: 'exact live ancestor.' }, { name: 'childId', description: 'durable child id.' }],
+        returns: 'current status snapshot.',
+        throws: ['when the child is unknown or outside the caller lineage.'],
+      },
+      {
+        signature: 'interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): SubagentControlResult',
         description: 'Interrupt one live continuable child\'s current turn under a human parent address or an exact live ancestor Agent. Fire-and-return: the cancel signal is issued before this returns, but the target may keep running until it observes the signal. Unclaimed pending inbox work, the Activation, and published descendants are preserved; claimed work is not requeued. Once the interrupted driver is idle, a waking send resumes the parked FIFO queue. An absent target — including a one-shot or unknown id — is an accepted no-op, as is a manager-less composition, which cannot own a live Activation.',
         parameters: [{ name: 'targetSessionId', description: 'the durable child session id to interrupt.' }, { name: 'authority', description: 'the human parent address or exact live ancestor Agent.' }],
+        returns: 'acceptance receipt with the target\'s previous state when known.',
         throws: ['{SubagentError} `UNAUTHORIZED` when the authority does not own the live target.'],
       },
       {
@@ -4466,6 +4495,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SubagentCapabilities {\n    readonly outputSchema: boolean;\n    readonly depthLimit: boolean;\n    readonly toolFilter: boolean;\n    readonly persona: boolean;\n}',
   },
   {
+    name: 'SubagentCloseAuthority',
+    declaration: 'export type SubagentCloseAuthority = {\n    readonly kind: \'direct-parent\';\n    readonly agent: Agent;\n} | {\n    readonly kind: \'ancestor\';\n    readonly agent: Agent;\n    readonly cascade: true;\n};',
+  },
+  {
+    name: 'SubagentCloseOptions',
+    declaration: 'export interface SubagentCloseOptions {\n    readonly cascade?: boolean;\n}',
+  },
+  {
+    name: 'SubagentCloseResult',
+    declaration: 'export interface SubagentCloseResult extends SubagentControlResult {\n    readonly closedAgentIds: readonly SessionId[];\n    readonly previousState: string;\n    readonly noOp: boolean;\n}',
+  },
+  {
+    name: 'SubagentControlRequestId',
+    declaration: 'export type SubagentControlRequestId = Branded<\'SubagentControlRequestId\'>;',
+  },
+  {
+    name: 'SubagentControlResult',
+    declaration: 'export interface SubagentControlResult {\n    readonly requestId: SubagentControlRequestId;\n    readonly agentId: SessionId;\n    readonly accepted: boolean;\n    readonly messageId?: MessageId;\n    readonly effectiveStep?: \'next-step\';\n    readonly previousState?: string;\n}',
+  },
+  {
     name: 'SubagentDescendantListEntry',
     declaration: 'export type SubagentDescendantListEntry = SubagentListEntry & {\n    readonly parentId: SessionId;\n    readonly depth: number;\n};',
   },
@@ -4484,6 +4533,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SubagentProvider',
     declaration: 'export interface SubagentProvider {\n    readonly name: string;\n    readonly capabilities: SubagentCapabilities;\n    readonly inheritsParentContext: boolean;\n    start(request: ResolvedSubagentStartRequest): Promise<SubagentRun>;\n    prepareContinuable?(request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>;\n}',
+  },
+  {
+    name: 'SubagentQueueOptions',
+    declaration: 'export interface SubagentQueueOptions {\n    readonly source: MessageSource;\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'SubagentReportDelivery',
@@ -4515,11 +4568,19 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentRuntime',
-    declaration: 'export class SubagentRuntime extends Service {\n    constructor(ctx: Context);\n    async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>;\n    async followup(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async reportFrom(child: Agent, content: ContentBlock[], options: SubagentReportOptions): Promise<MessageId>;\n    registerContinuableSetup(contribution: ContinuableSetupContribution): () => void;\n    async drainContinuableDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainContinuableChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    registerProvider(provider: SubagentProvider): () => void;\n    getProvider(name: string): SubagentProvider | undefined;\n    list(): string[];\n    async start(name: string, request: SubagentStartRequest): Promise<SubagentRun>;\n}',
+    declaration: 'export class SubagentRuntime extends Service {\n    constructor(ctx: Context);\n    async startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>;\n    async followup(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentFollowupOptions): Promise<SubagentControlResult>;\n    async queue(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentQueueOptions): Promise<SubagentControlResult>;\n    async steer(parent: Agent, childId: SessionId, content: ContentBlock[], options: SubagentSteerOptions): Promise<SubagentControlResult>;\n    async close(childId: SessionId, authority: SubagentCloseAuthority, options?: SubagentCloseOptions): Promise<SubagentCloseResult>;\n    async status(parent: Agent, childId: SessionId): Promise<SubagentStatusSnapshot>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): SubagentControlResult;\n    async reportFrom(child: Agent, content: ContentBlock[], options: SubagentReportOptions): Promise<MessageId>;\n    registerContinuableSetup(contribution: ContinuableSetupContribution): () => void;\n    async drainContinuableDescendants(parents: readonly Agent[]): Promise<void>;\n    async drainContinuableChildren(parent: Agent, childIds: readonly SessionId[]): Promise<void>;\n    listChildren(parentSessionId: SessionId, signal?: AbortSignal): Promise<SubagentListEntry[]>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    /* …truncated — full shape in source */',
   },
   {
     name: 'SubagentStartRequest',
     declaration: 'export interface SubagentStartRequest {\n    readonly label?: string;\n    readonly prompt: ContentBlock[];\n    readonly parent: Agent;\n    readonly signal: AbortSignal;\n    readonly agentOptions?: AgentOptions;\n    readonly outputSchema?: ObjectJsonSchema;\n    readonly maxDepth?: number;\n    readonly toolFilter?: ToolRestriction;\n    readonly persona?: string;\n}',
+  },
+  {
+    name: 'SubagentStatusSnapshot',
+    declaration: 'export interface SubagentStatusSnapshot {\n    readonly agentId: SessionId;\n    readonly parentSessionId: SessionId;\n    readonly state: \'running\' | \'idle\' | \'ready\' | \'completed\' | \'failed\' | \'interrupted\' | \'closed\';\n    readonly currentTurnId?: SubagentTurnId;\n    readonly phase?: string;\n    readonly lastActivityAt?: number;\n    readonly lastReport?: string;\n    readonly pendingMessageCount: number;\n    readonly stopReason?: string;\n}',
+  },
+  {
+    name: 'SubagentSteerOptions',
+    declaration: 'export interface SubagentSteerOptions {\n    readonly source: MessageSource;\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'SubagentStopReason',
@@ -4528,6 +4589,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SubagentStopReasonMap',
     declaration: 'export interface SubagentStopReasonMap {\n    completed: \'completed\';\n    aborted: \'aborted\';\n    error: \'error\';\n    \'max-tokens\': \'max-tokens\';\n    refusal: \'refusal\';\n}',
+  },
+  {
+    name: 'SubagentTurnId',
+    declaration: 'export type SubagentTurnId = Branded<\'SubagentTurnId\'>;',
   },
   {
     name: 'SubprocessCollect',
