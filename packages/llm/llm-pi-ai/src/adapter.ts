@@ -132,6 +132,29 @@ function profileOptions(
 }
 
 /**
+ * An `onPayload` hook that aligns the built `reasoning` object with what a
+ * Codex-compatible gateway/upstream accepts, for routes whose profile sets the
+ * `reasoningSummary` field. pi-ai emits `reasoning.summary` as `"auto"` and
+ * omits `reasoning.context`; gateways whose upstream rejects that shape (only
+ * accepting `summary: "detailed"` and a `context: "all_turns"`) get both here,
+ * after params are built. Unset profiles never install this hook, keeping
+ * their wire identical.
+ */
+function overrideReasoningSummary(summary: 'auto' | 'detailed' | 'concise' | null) {
+  return (payload: unknown): unknown => {
+    if (payload !== null && typeof payload === 'object') {
+      const reasoning = (payload as { reasoning?: unknown }).reasoning
+      if (reasoning !== null && typeof reasoning === 'object') {
+        const target = reasoning as { summary?: unknown; context?: unknown }
+        target.summary = summary
+        target.context = 'all_turns'
+      }
+    }
+    return payload
+  }
+}
+
+/**
  * The profile default this exact model can actually take, for DESCRIBING it.
  * A configured level the model does not support yields none rather than
  * throwing: `resolveModel` builds the model catalog, and a catalog that fails
@@ -201,12 +224,18 @@ function reasoningInfo(
   }
 }
 
-/** Merge deployment headers while removing case-insensitive attribution collisions. */
-function requestHeaders(headers: Readonly<Record<string, string>> | undefined): Record<string, string> {
-  const attribution = attributionHeaders()
+/**
+ * Merge deployment headers while removing case-insensitive attribution
+ * collisions. `userAgentOverride` swaps the mandated `user-agent` value for
+ * this route; everything else it sets keeps travelling through `headers`.
+ */
+function requestHeaders(profile: ResolvedPiAiProviderProfile): Record<string, string> {
+  const attribution = profile.userAgentOverride === undefined
+    ? attributionHeaders()
+    : { 'user-agent': profile.userAgentOverride }
   const reserved = new Set(Object.keys(attribution).map(name => name.toLowerCase()))
   return {
-    ...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
+    ...Object.fromEntries(Object.entries(profile.headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
     ...attribution,
   }
 }
@@ -377,10 +406,12 @@ export class PiAiAdapter extends LlmAdapter {
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
+        ...profile.reasoningSummary === undefined ? {} : { onPayload: overrideReasoningSummary(profile.reasoningSummary) },
         signal: watchdog.signal,
         // Profile headers are deployment-owned; attribution names are
-        // Harness-owned and therefore win collisions.
-        headers: requestHeaders(profile.headers),
+        // Harness-owned and therefore win collisions, unless the profile
+        // overrides the user-agent itself.
+        headers: requestHeaders(profile),
       })
       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
       let exhausted = false

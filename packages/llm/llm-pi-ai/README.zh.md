@@ -85,6 +85,10 @@ kind: "package-reference"
 | `requestImageMaxBytes` | `1 MiB` | 每张请求图片在 base64 扩展前的编码字节目标 |
 | `maxRequestImageBytes` | `20 MiB` | 带最旧优先卸载的 base64 图片载荷总上限 |
 | `retryPolicy` | normal，5 次重试 | 由 `dsh-llm-retry` 执行的提供方自有重试策略 |
+| `userAgentOverride` | Harness 归因 | 用网关要求的精确值替换该路由的 `User-Agent` |
+| `reasoningSummary` | pi-ai `"auto"` | 覆盖 `openai-responses` 路由的 `reasoning.summary`，并把 `reasoning.context` 固定为 `all_turns` |
+
+对位于按指纹识别客户端的网关之后的路由，可设置 `userAgentOverride` 出示精确的 `User-Agent`，替代强制的 `deepseek-harness/<版本> (+url)` 归因；空值或含换行的值会在解析时被拒绝，模型发现仍保持默认归因。上游拒绝 pi-ai 默认 `"auto"` 推理摘要的 `openai-responses` 路由可设置 `reasoningSummary`（`'auto' | 'detailed' | 'concise' | null`）；该覆盖会安装 `onPayload` 钩子，同时把 `reasoning.context` 固定为 `all_turns`，与官方 Codex 一致。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
