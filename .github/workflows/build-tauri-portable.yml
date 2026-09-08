@@ -1,0 +1,48 @@
+name: Tauri portable build
+
+# Personal portable Windows archive for the latest merged code
+# (release/desktop-tauri-portable). Run manually or on push to the branch.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - release/desktop-tauri-portable
+
+permissions:
+  contents: read
+
+env:
+  # CI runs must never report to the production telemetry endpoint.
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  build-portable:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build the Tauri portable archive
+        run: pnpm run desktop:build -- --allow-dirty
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tauri-portable
+          path: |
+            dist/desktop/output/*.zip
+            dist/desktop/output/*.sha256
+          if-no-files-found: error
