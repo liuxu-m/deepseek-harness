@@ -13,6 +13,7 @@ import { createUserMessage, CallId } from '@deepseek-ai/dsh-llm'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import type { PiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai'
 import { resolveProfiles } from '../src/config.ts'
+import { memoryAuth } from './auth-double.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
 afterEach(async () => {
@@ -38,6 +39,7 @@ function adapterOf(
     profiles: () => resolveProfiles(providers),
     resolveApiKey: () => Promise.resolve(apiKey),
     ...globalImage === undefined ? {} : { resolveGlobalImage: () => globalImage },
+    auth: memoryAuth(),
   })
 }
 

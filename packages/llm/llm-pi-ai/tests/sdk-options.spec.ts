@@ -66,6 +66,7 @@ function responsesAdapter(opts: {
       },
     }),
     resolveApiKey: () => Promise.resolve('test-key'),
+    auth: memoryAuth(),
   })
 }
 
