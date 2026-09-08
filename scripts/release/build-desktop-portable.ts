@@ -626,8 +626,11 @@ async function walkAndScan(
     if (CONFIG_DOCUMENT_EXTENSIONS.has(extension)) {
       // GitHub Actions workflow YAML under a package's `.github/` references
       // `${{ secrets.X }}` placeholders by design; those are not leaked values.
+      // Third-party package CI configs (e.g. `fs-ext/.travis.yml`) likewise
+      // assign secret-named keys in their build examples and are not our leaks.
       const segments = rel.split('/')
-      if (!segments.includes('.github')) {
+      const thirdPartyCiConfig = entry.name === '.travis.yml' || entry.name === '.appveyor.yml'
+      if (!segments.includes('.github') && !thirdPartyCiConfig) {
         if (SECRET_ASSIGNMENT.test(text)) push(rel, 'assigns a secret-named key a value')
       }
     }
