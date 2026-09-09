@@ -2,9 +2,12 @@
 //!
 //! `HostSupervisor` runs [`crate::discovery::discover_default`], then either
 //! attaches to a compatible external host or spawns the bundled web host as an
-//! [`OwnedProcess`]. It drains the child's stdout/stderr into `host.log`, parses
-//! the `dsh web: http://127.0.0.1:<port>` readiness line, revalidates the
-//! runtime identity, and records its own lifecycle events in `desktop.log`.
+//! [`OwnedProcess`]. It drains the child's stdout/stderr into `host.log` and
+//! parses the `dsh web: http://127.0.0.1:<port>` readiness line, which since
+//! the authenticated Web profile may carry a `/?token=` query. The owned child
+//! is ours, so its stdout line is the readiness authority; a legacy identity
+//! probe still runs when the endpoint answers, and a `200` from a foreign
+//! responder still fails the startup.
 //!
 //! Ownership matters on shutdown:
 //! - `Attached` holds only a URL + identity and never touches a process;
@@ -19,7 +22,8 @@
 //! added. Neither env contents nor identity response bodies are ever written to
 //! a log.
 
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
@@ -44,6 +48,8 @@ const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// The size at which `host.log` rotates to `host.log.1`.
 const HOST_LOG_ROTATE_BYTES: u64 = 5 * 1024 * 1024;
+/// How long one legacy-identity probe may take (mirrors discovery's fetch cap).
+const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 /// The maximum length of one drained line; longer output is truncated so a
 /// pathological writer cannot grow a single in-memory line without bound.
 const MAX_LOG_LINE_BYTES: usize = 64 * 1024;
@@ -63,10 +69,13 @@ pub enum HostSession {
     },
     /// A bundled host this desktop spawned and contains in a kill-on-close Job.
     Owned {
-        /// The ready base URL of the child host.
+        /// The ready page URL of the child host; since the authenticated Web
+        /// profile this may carry a `/?token=` query the WebView must load.
         base_url: String,
-        /// The child host's verified runtime identity.
-        identity: RuntimeIdentity,
+        /// The child's verified runtime identity when the legacy identity
+        /// endpoint answered; `None` when the child only printed a readiness URL
+        /// (the current profile no longer serves the identity endpoint).
+        identity: Option<RuntimeIdentity>,
         /// The contained child process; its stdio was moved to log drains.
         process: OwnedProcess,
     },
@@ -127,7 +136,7 @@ enum DrainEvent {
 /// session: the ready URL/identity and the still-live contained process.
 struct OwnedReady {
     base_url: String,
-    identity: RuntimeIdentity,
+    identity: Option<RuntimeIdentity>,
     process: OwnedProcess,
 }
 
@@ -256,11 +265,20 @@ impl HostSupervisor {
         let ready = self.establish_owned(command, args, cwd, env)?;
         let readiness_ms = start.elapsed().as_millis();
         let base_url = ready.base_url.clone();
+        let (protocol, instance) = match &ready.identity {
+            Some(identity) => (
+                identity.desktop_protocol,
+                identity.instance_id.clone(),
+            ),
+            // The authenticated profile no longer serves the legacy identity
+            // endpoint; the readiness line alone carries protocol 1.
+            None => (1u32, "launch".to_string()),
+        };
         self.desktop_log.event(
             "start",
             &format!(
-                "ownership=owned url={base_url} readiness_ms={readiness_ms} protocol={} instance={}",
-                ready.identity.desktop_protocol, ready.identity.instance_id
+                "ownership=owned url={} readiness_ms={readiness_ms} protocol={protocol} instance={instance}",
+                web_url_origin(&base_url)
             ),
         );
         self.session = Some(Owned {
@@ -315,7 +333,7 @@ impl HostSupervisor {
         drop(tx);
 
         let deadline = Instant::now() + self.startup_deadline;
-        let mut pending_base: Option<String> = None;
+        let mut pending: Option<(String, u16)> = None;
 
         loop {
             // Detect an early exit directly so readiness fails fast even when
@@ -339,42 +357,14 @@ impl HostSupervisor {
                 }
             }
 
-            if let Some(base) = &pending_base {
-                let endpoint = format!("{base}{DSH_RUNTIME_IDENTITY_PATH}");
-                match discover(&endpoint) {
-                    Ok(Discovery::Attach { base_url, identity }) => {
-                        return Ok(OwnedReady {
-                            base_url: base_url.clone(),
-                            identity,
-                            process,
-                        });
-                    }
-                    Ok(_) => {
-                        // Occupied but not yet a compatible host; probe again.
-                    }
-                    Err(error) => {
-                        // A non-loopback candidate endpoint: unreachable in
-                        // practice (the parse only yields loopback URLs), but
-                        // fail loud rather than loop.
-                        process.terminate_tree();
-                        self.join_drains();
-                        self.desktop_log
-                            .event("readiness", "outcome=error identity_probe_failed");
-                        return Err(DesktopError::Readiness(format!(
-                            "identity probe failed for {endpoint}: {error}"
-                        )));
-                    }
-                }
-            }
-
             match rx.recv_timeout(POLL_INTERVAL) {
                 Ok(DrainEvent::Url(line)) => match parse_web_url(&line) {
-                    // Only the first readiness line selects the probe target; a
-                    // later `dsh web:` line cannot flip a live probe to another
-                    // loopback port mid-startup.
-                    Some(base) => {
-                        if pending_base.is_none() {
-                            pending_base = Some(base);
+                    // Only the first readiness line selects the page URL; a
+                    // later `dsh web:` line cannot flip a live session to
+                    // another loopback port mid-startup.
+                    Some(url) => {
+                        if pending.is_none() {
+                            pending = Some((url.clone(), web_url_port(&url)));
                         }
                     }
                     None => {
@@ -409,6 +399,49 @@ impl HostSupervisor {
                     return Err(DesktopError::Readiness(
                         "the host log drain stopped unexpectedly".into(),
                     ));
+                }
+            }
+
+            // A URL is not enough on its own: revalidate the child's listener
+            // against the legacy identity endpoint when that endpoint answers.
+            // The owned child's stdout names its own port, so the only failure
+            // that aborts is a live `200` from a foreign responder; a missing
+            // endpoint (the authenticated Web profile returns 401/404) or an
+            // unreachable port during startup both continue to trust the line.
+            if let Some((url, port)) = &pending {
+                let origin = web_url_origin(url);
+                let endpoint = format!("{origin}{DSH_RUNTIME_IDENTITY_PATH}");
+                match discover(&endpoint) {
+                    Ok(Discovery::Attach { identity, .. }) => {
+                        return Ok(OwnedReady {
+                            base_url: url.clone(),
+                            identity: Some(identity),
+                            process,
+                        });
+                    }
+                    Ok(Discovery::StartDynamic) => {
+                        if legacy_identity_status(*port) == Some(200) {
+                            process.terminate_tree();
+                            self.join_drains();
+                            self.desktop_log
+                                .event("readiness", "outcome=error incompatible_host");
+                            return Err(DesktopError::Readiness(
+                                "the host answered the identity endpoint with an incompatible service"
+                                    .into(),
+                            ));
+                        }
+                        // No legacy identity (authenticated profile) or the
+                        // responder is still warming up; trust the owned child.
+                        return Ok(OwnedReady {
+                            base_url: url.clone(),
+                            identity: None,
+                            process,
+                        });
+                    }
+                    Ok(Discovery::StartDefault) | Err(_) => {
+                        // Nothing listening yet or the probe failed: keep
+                        // polling until the deadline or the child exits.
+                    }
                 }
             }
         }
@@ -493,10 +526,12 @@ impl HostSupervisor {
         }
     }
 
-    /// The runtime identity of the supervised host, if a session is established.
+    /// The runtime identity of the supervised host, if a session is established
+    /// and the legacy identity endpoint answered during readiness.
     pub fn identity(&self) -> Option<&RuntimeIdentity> {
         match &self.session {
-            Some(Attached { identity, .. }) | Some(Owned { identity, .. }) => Some(identity),
+            Some(Attached { identity, .. }) => Some(identity),
+            Some(Owned { identity, .. }) => identity.as_ref(),
             None => None,
         }
     }
@@ -579,21 +614,87 @@ fn is_secret_name(name: &str) -> bool {
         .any(|needle| upper.contains(needle))
 }
 
-/// Parse the `dsh web:` readiness line into its loopback base URL, or `None`
-/// when it does not match `^dsh web: (http://127\.0\.0\.1:\d+)(?: |$)` (the URL
-/// may be followed by a ` (LAN: ...)` suffix or end-of-line).
+/// Parse the `dsh web:` readiness line into its loopback page URL, or `None`
+/// when it does not start with a valid `http://127.0.0.1:<port>` authority (the
+/// URL may carry an authenticated `/?token=` query and a ` (LAN: ...)` note).
 fn parse_web_url(line: &str) -> Option<String> {
-    let rest = line
-        .strip_prefix("dsh web: ")?
-        .strip_prefix("http://127.0.0.1:")?;
-    let digits = rest.bytes().take_while(|b| b.is_ascii_digit()).count();
+    let after_prefix = line.strip_prefix("dsh web: ")?;
+    let after_scheme = after_prefix.strip_prefix("http://127.0.0.1:")?;
+    let digits = after_scheme.bytes().take_while(|b| b.is_ascii_digit()).count();
     if digits == 0 {
         return None;
     }
-    match rest[digits..].chars().next() {
-        None | Some(' ') => Some(format!("http://127.0.0.1:{}", &rest[..digits])),
-        Some(_) => None,
+    let port_tail = &after_scheme[digits..];
+    match port_tail.chars().next() {
+        None | Some(' ') | Some('/') | Some('?') => {}
+        Some(_) => return None,
     }
+    if let Some(path_after_root) = port_tail.strip_prefix('/') {
+        // Only the authenticated root (`/` alone or `/?query`) is accepted.
+        if !path_after_root.is_empty()
+            && !path_after_root.starts_with('?')
+            && !path_after_root.starts_with("?token=")
+        {
+            return None;
+        }
+    }
+    // The URL portion runs to the first whitespace, where a ` (LAN: ...)` note
+    // may follow.
+    let suffix_end = port_tail.find(' ').unwrap_or(port_tail.len());
+    Some(format!(
+        "http://127.0.0.1:{}{}",
+        &after_scheme[..digits],
+        &port_tail[..suffix_end]
+    ))
+}
+
+/// The loopback port of a parsed `dsh web:` page URL.
+fn web_url_port(url: &str) -> u16 {
+    url.strip_prefix("http://127.0.0.1:")
+        .and_then(|tail| tail.split(['/', '?']).next())
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(0)
+}
+
+/// The query-free loopback origin of a parsed page URL (safe to log).
+fn web_url_origin(url: &str) -> String {
+    let end = url.find('?').unwrap_or(url.len());
+    url[..end].trim_end_matches('/').to_string()
+}
+
+/// Whether the child's legacy identity endpoint answers HTTP `200`. A `200`
+/// proves a live foreign responder on the owned child's port; `None` or any
+/// other status (401/404 on the authenticated profile, or no listener yet)
+/// means the endpoint is absent or the child is still warming up.
+fn legacy_identity_status(port: u16) -> Option<u16> {
+    if port == 0 {
+        return None;
+    }
+    let address = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), port);
+    let mut stream = TcpStream::connect_timeout(&address, PROBE_TIMEOUT).ok()?;
+    stream.set_read_timeout(Some(PROBE_TIMEOUT)).ok()?;
+    stream.set_write_timeout(Some(PROBE_TIMEOUT)).ok()?;
+    let request = format!(
+        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n",
+        path = DSH_RUNTIME_IDENTITY_PATH
+    );
+    stream.write_all(request.as_bytes()).and_then(|_| stream.flush()).ok()?;
+    let mut status_line = Vec::with_capacity(64);
+    let mut chunk = [0u8; 1];
+    while status_line.len() < 64 {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(_) => {
+                if chunk[0] == b'\n' {
+                    break;
+                }
+                status_line.push(chunk[0]);
+            }
+            Err(_) => return None,
+        }
+    }
+    let line = String::from_utf8_lossy(&status_line);
+    line.split_whitespace().nth(1)?.parse().ok()
 }
 
 /// Read `reader` line by line, appending UTF-8-lossy lines to `log`. When
@@ -711,6 +812,18 @@ mod tests {
             parse_web_url("dsh web: http://127.0.0.1:3080 (LAN: http://192.168.1.5:3080)"),
             Some("http://127.0.0.1:3080".to_string())
         );
+    }
+
+    #[test]
+    fn parses_an_authenticated_ready_url_with_a_token_query() {
+        let url = "http://127.0.0.1:3080/?token=AbC123";
+        assert_eq!(
+            parse_web_url(&format!("dsh web: {url}")),
+            Some(url.to_string())
+        );
+        assert_eq!(web_url_origin(url), "http://127.0.0.1:3080");
+        assert_eq!(web_url_port(url), 3080);
+        assert_eq!(legacy_identity_status(1), None);
     }
 
     #[test]
