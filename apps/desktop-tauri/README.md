@@ -25,6 +25,8 @@ pnpm run desktop:manifest
 
 `scripts/release/desktop-tauri-manifest.ts` walks the workspace from the runtime entry points (`@deepseek-ai/dsh`, `@deepseek-ai/dsh-web-app`, `@deepseek-ai/dsh-web-frontend`), follows `dependencies`, `optionalDependencies`, and every workspace `peerDependencies` entry, and rewrites the manifest's `dependencies` block. `pnpm run desktop:manifest -- --check` fails when the committed manifest is stale. `pnpm run verify-runtime-closure --manifest apps/desktop-tauri/package.json` then rejects any reachable workspace peer the manifest omits.
 
+The walk also adds `PLUGIN_CLIENT_PEERS` from that script: `@deepseek-ai/dsh-client-ui-primitives` and `@deepseek-ai/dsh-client-ui-slots`. Upstream declares both as build-time `devDependencies`, so the walk never reaches them, but a published bundle can name them in `dsh.client.inject` and expect the Host to resolve them from the profile's module path. A profile that falls back to this runtime for that resolution needs them shipped.
+
 ## Build and test
 
 ```sh

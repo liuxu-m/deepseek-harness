@@ -29,6 +29,20 @@ export const RUNTIME_SEEDS = [
   '@deepseek-ai/dsh-web-frontend',
 ] as const
 
+/**
+ * Client packages an installed third-party bundle may declare as a peer and
+ * name in its `dsh.client.inject` list, which the Host resolves from the
+ * profile's module path. Upstream declares them as build-time
+ * `devDependencies`, so the workspace walk never reaches them, yet a profile
+ * whose plugin resolution falls back to the runtime closure needs them
+ * present. Keep this list limited to packages the official runtime once
+ * shipped and a published bundle still injects.
+ */
+export const PLUGIN_CLIENT_PEERS = [
+  '@deepseek-ai/dsh-client-ui-primitives',
+  '@deepseek-ai/dsh-client-ui-slots',
+] as const
+
 /** One workspace package discovered through the pnpm workspace globs. */
 interface WorkspacePackage {
   /** Manifest path relative to the repository root. */
@@ -115,7 +129,7 @@ export function computeClosure(
 ): ClosureResult {
   const declared = new Set<string>()
   const externalSpecs = new Map<string, string>()
-  const queue = [...seeds]
+  const queue = [...seeds, ...PLUGIN_CLIENT_PEERS]
   const visited = new Set<string>()
   while (queue.length > 0) {
     const name = queue.shift()

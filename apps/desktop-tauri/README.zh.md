@@ -25,6 +25,8 @@ pnpm run desktop:manifest
 
 `scripts/release/desktop-tauri-manifest.ts` 从运行时入口（`@deepseek-ai/dsh`、`@deepseek-ai/dsh-web-app`、`@deepseek-ai/dsh-web-frontend`）出发遍历 workspace，沿 `dependencies`、`optionalDependencies` 以及全部 workspace `peerDependencies` 收集，然后重写清单的 `dependencies` 段。`pnpm run desktop:manifest -- --check` 在提交的清单过期时失败。随后 `pnpm run verify-runtime-closure --manifest apps/desktop-tauri/package.json` 会拒绝清单遗漏的任何可达 workspace peer。
 
+遍历还会加入该脚本里的 `PLUGIN_CLIENT_PEERS`：`@deepseek-ai/dsh-client-ui-primitives` 与 `@deepseek-ai/dsh-client-ui-slots`。上游把这两个都声明为构建期 `devDependencies`，因此遍历永远不会到达它们；但已发布的 bundle 可能在 `dsh.client.inject` 中指名它们，并期望 Host 从 profile 的模块路径解析。若某个 profile 的解析回退到本运行时，就必须随包提供它们。
+
 ## 构建与测试
 
 ```sh

@@ -18,7 +18,7 @@ Tauri 外壳是独立的 workspace 包 `apps/desktop-tauri`（`@deepseek-ai/dsh-
 
 运行时部署根随之迁移。`apps/desktop-tauri/package.json` 是 `pnpm deploy --prod` 部署的包，`scripts/release/build-desktop-runtime.ts` 与 `scripts/release/build-desktop-portable.ts` 通过 `DESKTOP_PACKAGE`、`DESKTOP_MANIFEST`、`DEFAULT_EXE` 以及部署 hoist 恢复路径引用它。官方清单及其发布脚本原样保留、不受影响。
 
-闭包由生成而非维护。`scripts/release/desktop-tauri-manifest.ts` 从 `@deepseek-ai/dsh`、`@deepseek-ai/dsh-web-app`、`@deepseek-ai/dsh-web-frontend` 出发遍历 workspace，沿 `dependencies`、`optionalDependencies` 以及全部 workspace `peerDependencies` 收集，并重写清单的 `dependencies` 段；`--check` 会把过期清单变成失败。此前手工维护的列表必然是漂移的：对照本分支现在跟踪的包，有五十个列出的条目没有对应 workspace 清单，另有五十五个可达包被遗漏。
+闭包由生成而非维护。`scripts/release/desktop-tauri-manifest.ts` 从 `@deepseek-ai/dsh`、`@deepseek-ai/dsh-web-app`、`@deepseek-ai/dsh-web-frontend` 出发遍历 workspace，沿 `dependencies`、`optionalDependencies` 以及全部 workspace `peerDependencies` 收集，并重写清单的 `dependencies` 段；`--check` 会把过期清单变成失败。此前手工维护的列表必然是漂移的：对照本分支现在跟踪的包，有五十个列出的条目没有对应 workspace 清单，另有五十五个可达包被遗漏。遍历还会声明 `PLUGIN_CLIENT_PEERS`——`@deepseek-ai/dsh-client-ui-primitives` 与 `@deepseek-ai/dsh-client-ui-slots`：上游把二者保留为构建期 `devDependencies`，而已发布的 bundle 可能在 `dsh.client.inject` 中指名它们；手工列表曾随包提供它们，一旦丢弃，解析回退到本运行时的 profile 就会插件加载失败。
 
 根接线是纯追加的。`package.json` 保留全部上游 `build:desktop` 至 `upload:win:x64` 行，并新增 `desktop:manifest`、`desktop:runtime`、`desktop:build`、`desktop:test`。`tsdown.config.ts` 与 `tsconfig.host.json` 完全不改动，因为官方 Electron 桌面端仍是这些配置已覆盖的 workspace 成员。
 
