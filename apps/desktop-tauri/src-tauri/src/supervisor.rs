@@ -1,0 +1,874 @@
+//! Host supervisor: readiness, log drains, and graceful shutdown (Windows-only).
+//!
+//! `HostSupervisor` runs [`crate::discovery::discover_default`], then either
+//! attaches to a compatible external host or spawns the bundled web host as an
+//! [`OwnedProcess`]. It drains the child's stdout/stderr into `host.log` and
+//! parses the `dsh web: http://127.0.0.1:<port>` readiness line, which since
+//! the authenticated Web profile may carry a `/?token=` query. The owned child
+//! is ours, so its stdout line is the readiness authority; a legacy identity
+//! probe still runs when the endpoint answers, and a `200` from a foreign
+//! responder still fails the startup.
+//!
+//! Ownership matters on shutdown:
+//! - `Attached` holds only a URL + identity and never touches a process;
+//!   [`HostSupervisor::shutdown`] reports [`ShutdownOutcome::Detached`].
+//! - `Owned` writes the parent-control shutdown frame, waits a bounded grace
+//!   window for the child to exit, and only then closes the Job (killing the
+//!   tree) if the child is still alive. A child that already exited on its own
+//!   is reaped and its exit code reported instead of being force-terminated.
+//!
+//! Env: the child receives the desktop process env with secret-named entries
+//! removed and `DSH_HOME` / `DSH_PARENT_CONTROL` / `DSH_TELEMETRY_DISABLED`
+//! added. Neither env contents nor identity response bodies are ever written to
+//! a log.
+
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use thiserror::Error;
+
+use crate::discovery::{discover, Discovery, DiscoveryError, DESKTOP_DEFAULT_PORT};
+use crate::host_log::{DesktopLog, RotatingLog};
+use crate::identity::{RuntimeIdentity, DSH_RUNTIME_IDENTITY_PATH};
+use crate::paths::DesktopPaths;
+use crate::windows_job::{JobError, OwnedProcess};
+
+/// The parent-control shutdown frame the CLI (Task 2 / `DSH_PARENT_CONTROL`)
+/// reads from stdin.
+const SHUTDOWN_FRAME: &[u8] = b"{\"type\":\"shutdown\",\"protocol\":1}\n";
+/// How long an owned host gets from spawn to become ready.
+const STARTUP_DEADLINE: Duration = Duration::from_secs(120);
+/// How long shutdown waits for a graceful exit before forcing the tree closed.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
+/// The readiness/poll non-blocking wait between deadline checks.
+const POLL_INTERVAL: Duration = Duration::from_millis(100);
+/// The size at which `host.log` rotates to `host.log.1`.
+const HOST_LOG_ROTATE_BYTES: u64 = 5 * 1024 * 1024;
+/// How long one legacy-identity probe may take (mirrors discovery's fetch cap).
+const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+/// The maximum length of one drained line; longer output is truncated so a
+/// pathological writer cannot grow a single in-memory line without bound.
+const MAX_LOG_LINE_BYTES: usize = 64 * 1024;
+/// The bundled CLI under the extraction root, relative to the node binary.
+const HOST_HEADLESS_ARGS: &str = "--profile web --port";
+
+/// Whether the bundled host is owned by this desktop (spawned and contained in
+/// a Job) or external (discovered already running and merely attached).
+#[derive(Debug)]
+pub enum HostSession {
+    /// An external compatible host already listening; never touch a process.
+    Attached {
+        /// The verified base URL of the external host.
+        base_url: String,
+        /// The external host's verified runtime identity.
+        identity: RuntimeIdentity,
+    },
+    /// A bundled host this desktop spawned and contains in a kill-on-close Job.
+    Owned {
+        /// The ready page URL of the child host; since the authenticated Web
+        /// profile this may carry a `/?token=` query the WebView must load.
+        base_url: String,
+        /// The child's verified runtime identity when the legacy identity
+        /// endpoint answered; `None` when the child only printed a readiness URL
+        /// (the current profile no longer serves the identity endpoint).
+        identity: Option<RuntimeIdentity>,
+        /// The contained child process; its stdio was moved to log drains.
+        process: OwnedProcess,
+    },
+}
+
+use HostSession::{Attached, Owned};
+
+/// The result of a graceful shutdown opportunity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShutdownOutcome {
+    /// No owned process: either already shut down or only attached.
+    Detached,
+    /// The owned host exited within the grace window after the shutdown frame.
+    Graceful,
+    /// The owned host ignored the frame and was reclaimed by closing the Job.
+    Forced,
+}
+
+/// Why the supervisor failed to run, make the host ready, or shut it down.
+#[derive(Debug, Error)]
+pub enum DesktopError {
+    /// Host discovery failed.
+    #[error("host discovery failed: {0}")]
+    Discovery(#[from] DiscoveryError),
+    /// Starting the bundled host process failed.
+    #[error("starting the bundled host failed: {0}")]
+    Spawn(#[from] JobError),
+    /// The host became ready with an unexpected identity or state.
+    #[error("host readiness failed: {0}")]
+    Readiness(String),
+    /// The host took longer than the startup deadline to become ready.
+    #[error("host did not become ready within {0:?}")]
+    ReadinessTimeout(Duration),
+    /// The host printed a `dsh web:` line that is not a loopback URL.
+    #[error("host printed a malformed readiness URL: `{0}`")]
+    MalformedUrl(String),
+    /// Writing the shutdown frame failed.
+    #[error("writing the shutdown frame failed: {0}")]
+    ShutdownWrite(#[source] std::io::Error),
+    /// Waiting for the child to exit during shutdown failed.
+    #[error("waiting for the host to exit failed: {0}")]
+    ShutdownWait(#[source] std::io::Error),
+    /// Writing the control frame failed while the child was still alive.
+    #[error("shutdown control fell through with the host still running: {0}")]
+    ShutdownControl(#[source] std::io::Error),
+}
+
+/// One readiness-relevant event from the stdout drain, or the drain's EOF.
+#[derive(Debug)]
+enum DrainEvent {
+    /// A stdout line beginning with the `dsh web: ` readiness prefix.
+    Url(String),
+    /// The child's stdout closed without reaching the event end.
+    Eof,
+}
+
+/// The bits a successful owned spawn returns before they are folded into a
+/// session: the ready URL/identity and the still-live contained process.
+struct OwnedReady {
+    base_url: String,
+    identity: Option<RuntimeIdentity>,
+    process: OwnedProcess,
+}
+
+/// Supervises the bundled or external web host for the desktop shell.
+#[derive(Debug)]
+pub struct HostSupervisor {
+    paths: DesktopPaths,
+    session: Option<HostSession>,
+    startup_deadline: Duration,
+    host_log: Arc<Mutex<RotatingLog>>,
+    desktop_log: DesktopLog,
+    drains: Vec<std::thread::JoinHandle<()>>,
+    /// The pid of the most recently spawned owned host, kept across a failed
+    /// readiness so a caller can verify the tree was reclaimed.
+    owned_pid: Option<u32>,
+}
+
+impl HostSupervisor {
+    /// Create a supervisor for `paths`.
+    pub fn new(paths: DesktopPaths) -> Self {
+        let logs = paths.logs.clone();
+        Self {
+            paths,
+            session: None,
+            startup_deadline: STARTUP_DEADLINE,
+            host_log: Arc::new(Mutex::new(RotatingLog::new(
+                logs.join("host.log"),
+                HOST_LOG_ROTATE_BYTES,
+            ))),
+            desktop_log: DesktopLog::new(logs.join("desktop.log")),
+            drains: Vec::new(),
+            owned_pid: None,
+        }
+    }
+
+    /// Override the startup deadline. The production default is 120 seconds;
+    /// tests shorten it so a never-ready fixture fails fast.
+    pub fn with_startup_deadline(mut self, deadline: Duration) -> Self {
+        self.startup_deadline = deadline;
+        self
+    }
+
+    /// Run `discover_default` and then establish the session it implies.
+    pub fn start(&mut self) -> Result<String, DesktopError> {
+        let discovery = match crate::discovery::discover_default() {
+            Ok(discovery) => discovery,
+            Err(error) => {
+                self.desktop_log
+                    .event("discovery", &format!("outcome=error {error}"));
+                return Err(error.into());
+            }
+        };
+        self.start_from(&discovery)
+    }
+
+    /// Record a startup failure in the desktop log so the full reason survives
+    /// even when the error page cannot be shown or carries only a summary.
+    pub fn log_startup_error(&mut self, error: &DesktopError) {
+        self.desktop_log
+            .event("startup", &format!("outcome=error {error}"));
+    }
+
+    /// Establish the session implied by `discovery`. `Attach` merely holds the
+    /// URL + identity; `StartDefault` / `StartDynamic` spawn the bundled host
+    /// and wait for it to become ready. Returns the selected base URL.
+    pub fn start_from(&mut self, discovery: &Discovery) -> Result<String, DesktopError> {
+        match discovery {
+            Discovery::Attach { base_url, identity } => {
+                self.session = Some(Attached {
+                    base_url: base_url.clone(),
+                    identity: identity.clone(),
+                });
+                self.desktop_log
+                    .event("start", &format!("ownership=attached url={base_url}"));
+                Ok(base_url.clone())
+            }
+            Discovery::StartDefault => {
+                let url = self.spawn_default(DESKTOP_DEFAULT_PORT)?;
+                Ok(url)
+            }
+            Discovery::StartDynamic => {
+                let url = self.spawn_default(0)?;
+                Ok(url)
+            }
+        }
+    }
+
+    /// Spawn the bundled host and wait for readiness, or report an error.
+    fn spawn_default(&mut self, port: u16) -> Result<String, DesktopError> {
+        let command = self.paths.node.to_string_lossy().into_owned();
+        let bin = runtime_bin(&self.paths);
+        // The bin path is quoted so a portable extraction root containing
+        // spaces or CJK characters survives CreateProcessW's argv[0] parsing.
+        let args = format!(
+            "\"{}\" {HOST_HEADLESS_ARGS} {port}",
+            bin.to_string_lossy().replace('"', "\"\"")
+        );
+        let cwd = self.paths.cwd.clone();
+        let env = production_env(&self.paths);
+        self.desktop_log.event(
+            "spawn",
+            &format!(
+                "command=\"{command}\" args={args} cwd={} port={port}",
+                cwd.display()
+            ),
+        );
+        let base_url = self.spawn_with(&command, &args, Some(&cwd), Some(&env))?;
+        Ok(base_url)
+    }
+
+    /// Spawn `command` with `args` as an owned host and wait for it to become
+    /// ready. On success the owned session is stored and `base_url` returned;
+    /// on any readiness failure the owned tree is terminated (best-effort, a
+    /// no-op if the child already exited) before the error is returned.
+    ///
+    /// This is the core spawn path used by production and exercised in tests
+    /// with a fixture binary standing in for the bundled CLI.
+    pub fn spawn_with(
+        &mut self,
+        command: &str,
+        args: &str,
+        cwd: Option<&Path>,
+        env: Option<&[(String, String)]>,
+    ) -> Result<String, DesktopError> {
+        let start = Instant::now();
+        let ready = self.establish_owned(command, args, cwd, env)?;
+        let readiness_ms = start.elapsed().as_millis();
+        let base_url = ready.base_url.clone();
+        let (protocol, instance) = match &ready.identity {
+            Some(identity) => (
+                identity.desktop_protocol,
+                identity.instance_id.clone(),
+            ),
+            // The authenticated profile no longer serves the legacy identity
+            // endpoint; the readiness line alone carries protocol 1.
+            None => (1u32, "launch".to_string()),
+        };
+        self.desktop_log.event(
+            "start",
+            &format!(
+                "ownership=owned url={} readiness_ms={readiness_ms} protocol={protocol} instance={instance}",
+                web_url_origin(&base_url)
+            ),
+        );
+        self.session = Some(Owned {
+            base_url: ready.base_url,
+            identity: ready.identity,
+            process: ready.process,
+        });
+        Ok(base_url)
+    }
+
+    /// Spawn the child, start the log drains, and wait up to the startup
+    /// deadline for a `dsh web: http://127.0.0.1:<port>` line whose loopback
+    /// identity revalidates as a compatible host.
+    ///
+    /// On any failure the child is force-reclaimed and the log drains joined
+    /// before the error returns, so no thread or process outlives the call.
+    fn establish_owned(
+        &mut self,
+        command: &str,
+        args: &str,
+        cwd: Option<&Path>,
+        env: Option<&[(String, String)]>,
+    ) -> Result<OwnedReady, DesktopError> {
+        let mut process = match OwnedProcess::spawn(command, args, cwd, env) {
+            Ok(process) => process,
+            Err(error) => {
+                self.desktop_log
+                    .event("spawn", &format!("outcome=error {error}"));
+                return Err(DesktopError::Spawn(error));
+            }
+        };
+        let child_pid = process.pid();
+        self.owned_pid = Some(child_pid);
+        self.desktop_log.event("spawn", &format!("pid={child_pid}"));
+
+        let stdout = process.take_stdout();
+        let stderr = process.take_stderr();
+        let (tx, rx) = channel();
+        if let Some(out) = stdout {
+            let log = Arc::clone(&self.host_log);
+            let tx = tx.clone();
+            self.drains.push(std::thread::spawn(move || {
+                drain_output(out, log, Some(tx), true);
+            }));
+        }
+        if let Some(errp) = stderr {
+            let log = Arc::clone(&self.host_log);
+            self.drains.push(std::thread::spawn(move || {
+                drain_output(errp, log, None, false);
+            }));
+        }
+        drop(tx);
+
+        let deadline = Instant::now() + self.startup_deadline;
+        let mut pending: Option<(String, u16)> = None;
+
+        loop {
+            // Detect an early exit directly so readiness fails fast even when
+            // the stdout EOF lags under load; the Eof DrainEvent is a fallback.
+            match process.try_wait() {
+                Ok(Some(_)) => {
+                    // Child already exited; it reaped itself via try_wait, so no
+                    // terminate is needed (try_wait would report it reaped).
+                    self.join_drains();
+                    self.desktop_log
+                        .event("readiness", "outcome=child_exited_before_ready");
+                    return Err(DesktopError::Readiness(
+                        "the host exited before becoming ready".into(),
+                    ));
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    process.terminate_tree();
+                    self.join_drains();
+                    return Err(DesktopError::ShutdownWait(error));
+                }
+            }
+
+            match rx.recv_timeout(POLL_INTERVAL) {
+                Ok(DrainEvent::Url(line)) => match parse_web_url(&line) {
+                    // Only the first readiness line selects the page URL; a
+                    // later `dsh web:` line cannot flip a live session to
+                    // another loopback port mid-startup.
+                    Some(url) => {
+                        if pending.is_none() {
+                            pending = Some((url.clone(), web_url_port(&url)));
+                        }
+                    }
+                    None => {
+                        process.terminate_tree();
+                        self.join_drains();
+                        self.desktop_log.event("readiness", "outcome=malformed_url");
+                        return Err(DesktopError::MalformedUrl(line));
+                    }
+                },
+                Ok(DrainEvent::Eof) => {
+                    process.terminate_tree();
+                    self.join_drains();
+                    self.desktop_log
+                        .event("readiness", "outcome=child_exited_before_ready");
+                    return Err(DesktopError::Readiness(
+                        "the host exited before becoming ready".into(),
+                    ));
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    if Instant::now() >= deadline {
+                        process.terminate_tree();
+                        self.join_drains();
+                        self.desktop_log.event("readiness", "outcome=timeout");
+                        return Err(DesktopError::ReadinessTimeout(
+                            self.startup_deadline,
+                        ));
+                    }
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    process.terminate_tree();
+                    self.join_drains();
+                    return Err(DesktopError::Readiness(
+                        "the host log drain stopped unexpectedly".into(),
+                    ));
+                }
+            }
+
+            // A URL is not enough on its own: revalidate the child's listener
+            // against the legacy identity endpoint when that endpoint answers.
+            // The owned child's stdout names its own port, so the only failure
+            // that aborts is a live `200` from a foreign responder; a missing
+            // endpoint (the authenticated Web profile returns 401/404) or an
+            // unreachable port during startup both continue to trust the line.
+            if let Some((url, port)) = &pending {
+                let origin = web_url_origin(url);
+                let endpoint = format!("{origin}{DSH_RUNTIME_IDENTITY_PATH}");
+                match discover(&endpoint) {
+                    Ok(Discovery::Attach { identity, .. }) => {
+                        return Ok(OwnedReady {
+                            base_url: url.clone(),
+                            identity: Some(identity),
+                            process,
+                        });
+                    }
+                    Ok(Discovery::StartDynamic) => {
+                        if legacy_identity_status(*port) == Some(200) {
+                            process.terminate_tree();
+                            self.join_drains();
+                            self.desktop_log
+                                .event("readiness", "outcome=error incompatible_host");
+                            return Err(DesktopError::Readiness(
+                                "the host answered the identity endpoint with an incompatible service"
+                                    .into(),
+                            ));
+                        }
+                        // No legacy identity (authenticated profile) or the
+                        // responder is still warming up; trust the owned child.
+                        return Ok(OwnedReady {
+                            base_url: url.clone(),
+                            identity: None,
+                            process,
+                        });
+                    }
+                    Ok(Discovery::StartDefault) | Err(_) => {
+                        // Nothing listening yet or the probe failed: keep
+                        // polling until the deadline or the child exits.
+                    }
+                }
+            }
+        }
+    }
+
+    /// Shut down the supervised host. An attached or absent host is detached; an
+    /// owned host gets the shutdown frame, a bounded grace wait, then a Job
+    /// close (tree kill) only if it is still alive.
+    pub fn shutdown(&mut self) -> Result<ShutdownOutcome, DesktopError> {
+        let outcome = match self.session.take() {
+            Some(Attached { .. }) | None => {
+                self.desktop_log.event("shutdown", "outcome=detached");
+                ShutdownOutcome::Detached
+            }
+            Some(Owned { mut process, .. }) => {
+                match process.write_control_frame(SHUTDOWN_FRAME) {
+                    Ok(()) => match process.wait(SHUTDOWN_GRACE) {
+                        Ok(Some(status)) => {
+                            let code = status.code().unwrap_or(i32::MIN);
+                            self.join_drains();
+                            self.desktop_log.event(
+                                "shutdown",
+                                &format!("outcome=graceful exit_code={code}"),
+                            );
+                            ShutdownOutcome::Graceful
+                        }
+                        Ok(None) => {
+                            process.terminate_tree();
+                            self.join_drains();
+                            self.desktop_log.event("shutdown", "outcome=forced");
+                            ShutdownOutcome::Forced
+                        }
+                        Err(error) => {
+                            process.terminate_tree();
+                            self.join_drains();
+                            self.desktop_log
+                                .event("shutdown", "outcome=error waiting_for_exit");
+                            return Err(DesktopError::ShutdownWait(error));
+                        }
+                    },
+                    Err(error) => {
+                        // The write can fail because the child already exited.
+                        // Reap it and report the actual exit status rather than
+                        // force-terminating a tree that is already gone.
+                        match process.try_wait() {
+                            Ok(Some(status)) => {
+                                let code = status.code().unwrap_or(i32::MIN);
+                                self.join_drains();
+                                self.desktop_log.event(
+                                    "shutdown",
+                                    &format!("outcome=graceful early_exit_code={code}"),
+                                );
+                                ShutdownOutcome::Graceful
+                            }
+                            Ok(None) => {
+                                // The write failed while the child is still
+                                // alive; reclaim the tree so nothing leaks.
+                                process.terminate_tree();
+                                self.join_drains();
+                                self.desktop_log
+                                    .event("shutdown", "outcome=forced write_failed");
+                                return Err(DesktopError::ShutdownControl(error));
+                            }
+                            Err(reap_error) => {
+                                process.terminate_tree();
+                                self.join_drains();
+                                return Err(DesktopError::ShutdownWait(reap_error));
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        Ok(outcome)
+    }
+
+    /// The base URL of the supervised host, if a session is established.
+    pub fn base_url(&self) -> Option<&str> {
+        match &self.session {
+            Some(Attached { base_url, .. }) | Some(Owned { base_url, .. }) => Some(base_url),
+            None => None,
+        }
+    }
+
+    /// The runtime identity of the supervised host, if a session is established
+    /// and the legacy identity endpoint answered during readiness.
+    pub fn identity(&self) -> Option<&RuntimeIdentity> {
+        match &self.session {
+            Some(Attached { identity, .. }) => Some(identity),
+            Some(Owned { identity, .. }) => identity.as_ref(),
+            None => None,
+        }
+    }
+
+    /// The pid of the most recently spawned owned host. Retained across a failed
+    /// readiness so a caller can confirm the tree was reclaimed.
+    pub fn owned_pid(&self) -> Option<u32> {
+        self.owned_pid
+    }
+
+    /// Wait for every active log drain to finish reading to EOF. Idempotent.
+    ///
+    /// Closing the kill-on-close Job reaps the child at kernel teardown, which
+    /// closes the child's pipe write ends and EOFs the readers, so a join cannot
+    /// block on a live child. Only a child that detached from the Job could keep
+    /// the pipe open; the supervisor never creates such a child.
+    fn join_drains(&mut self) {
+        let handles = std::mem::take(&mut self.drains);
+        for handle in handles {
+            let _ = handle.join();
+        }
+    }
+}
+
+/// Join the log drains when the supervisor is dropped so a partially-supervised
+/// owned host never leaves reader threads racing its teardown. An owned session
+/// reached here was never explicitly shut down, so it is force-terminated first
+/// (the Job close EOFs the pipes) before the drains are joined.
+impl Drop for HostSupervisor {
+    fn drop(&mut self) {
+        if let Some(Owned { mut process, .. }) = self.session.take() {
+            process.terminate_tree();
+        }
+        self.join_drains();
+    }
+}
+
+/// The bundled CLI entry point under the extraction root implied by `paths.node`
+/// (`<root>/node/node.exe` -> `<root>/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js`).
+fn runtime_bin(paths: &DesktopPaths) -> PathBuf {
+    let extraction = paths
+        .node
+        .parent()
+        .expect("desktop node path is under an extraction root")
+        .parent()
+        .expect("desktop node path is under an extraction root");
+    extraction
+        .join("runtime")
+        .join("node_modules")
+        .join("@deepseek-ai")
+        .join("dsh")
+        .join("lib")
+        .join("bin.js")
+}
+
+/// The child env for a spawned host: the desktop process env with secret-named
+/// entries dropped, plus `DSH_HOME`, `DSH_PARENT_CONTROL=stdin-v1`, and
+/// `DSH_TELEMETRY_DISABLED` when the parent carried it. Secret-named entries are
+/// never forwarded to the child and never logged.
+fn production_env(paths: &DesktopPaths) -> Vec<(String, String)> {
+    let mut env: Vec<(String, String)> = std::env::vars()
+        .filter(|(key, _)| !is_secret_name(key))
+        .collect();
+    env.push(("DSH_HOME".to_string(), paths.home.to_string_lossy().into_owned()));
+    env.push(("DSH_PARENT_CONTROL".to_string(), "stdin-v1".to_string()));
+    if let Ok(value) = std::env::var("DSH_TELEMETRY_DISABLED") {
+        env.push(("DSH_TELEMETRY_DISABLED".to_string(), value));
+    }
+    env
+}
+
+/// Whether an env var name carries a secret and must not reach a child or a log.
+/// The substring match is deliberately broad (per the plan's `KEY`/`SECRET`/
+/// `TOKEN`/`PASSWORD` names): it may drop an innocuous var like `MONKEY_BARREL`,
+/// which is safe — a missing var is always safer than a leaked one.
+fn is_secret_name(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    ["KEY", "SECRET", "TOKEN", "PASSWORD"]
+        .iter()
+        .any(|needle| upper.contains(needle))
+}
+
+/// Parse the `dsh web:` readiness line into its loopback page URL, or `None`
+/// when it does not start with a valid `http://127.0.0.1:<port>` authority (the
+/// URL may carry an authenticated `/?token=` query and a ` (LAN: ...)` note).
+fn parse_web_url(line: &str) -> Option<String> {
+    let after_prefix = line.strip_prefix("dsh web: ")?;
+    let after_scheme = after_prefix.strip_prefix("http://127.0.0.1:")?;
+    let digits = after_scheme.bytes().take_while(|b| b.is_ascii_digit()).count();
+    if digits == 0 {
+        return None;
+    }
+    let port_tail = &after_scheme[digits..];
+    match port_tail.chars().next() {
+        None | Some(' ') | Some('/') | Some('?') => {}
+        Some(_) => return None,
+    }
+    if let Some(path_after_root) = port_tail.strip_prefix('/') {
+        // Only the authenticated root (`/` alone or `/?query`) is accepted.
+        if !path_after_root.is_empty()
+            && !path_after_root.starts_with('?')
+            && !path_after_root.starts_with("?token=")
+        {
+            return None;
+        }
+    }
+    // The URL portion runs to the first whitespace, where a ` (LAN: ...)` note
+    // may follow.
+    let suffix_end = port_tail.find(' ').unwrap_or(port_tail.len());
+    Some(format!(
+        "http://127.0.0.1:{}{}",
+        &after_scheme[..digits],
+        &port_tail[..suffix_end]
+    ))
+}
+
+/// The loopback port of a parsed `dsh web:` page URL.
+fn web_url_port(url: &str) -> u16 {
+    url.strip_prefix("http://127.0.0.1:")
+        .and_then(|tail| tail.split(['/', '?']).next())
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(0)
+}
+
+/// The query-free loopback origin of a parsed page URL (safe to log).
+fn web_url_origin(url: &str) -> String {
+    let end = url.find('?').unwrap_or(url.len());
+    url[..end].trim_end_matches('/').to_string()
+}
+
+/// Whether the child's legacy identity endpoint answers HTTP `200`. A `200`
+/// proves a live foreign responder on the owned child's port; `None` or any
+/// other status (401/404 on the authenticated profile, or no listener yet)
+/// means the endpoint is absent or the child is still warming up.
+fn legacy_identity_status(port: u16) -> Option<u16> {
+    if port == 0 {
+        return None;
+    }
+    let address = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), port);
+    let mut stream = TcpStream::connect_timeout(&address, PROBE_TIMEOUT).ok()?;
+    stream.set_read_timeout(Some(PROBE_TIMEOUT)).ok()?;
+    stream.set_write_timeout(Some(PROBE_TIMEOUT)).ok()?;
+    let request = format!(
+        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n",
+        path = DSH_RUNTIME_IDENTITY_PATH
+    );
+    stream.write_all(request.as_bytes()).and_then(|_| stream.flush()).ok()?;
+    let mut status_line = Vec::with_capacity(64);
+    let mut chunk = [0u8; 1];
+    while status_line.len() < 64 {
+        match stream.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(_) => {
+                if chunk[0] == b'\n' {
+                    break;
+                }
+                status_line.push(chunk[0]);
+            }
+            Err(_) => return None,
+        }
+    }
+    let line = String::from_utf8_lossy(&status_line);
+    line.split_whitespace().nth(1)?.parse().ok()
+}
+
+/// Read `reader` line by line, appending UTF-8-lossy lines to `log`. When
+/// `send_urls`, forward every `dsh web: `-prefixed line to `tx` for readiness
+/// parsing and send a final `Eof` once the pipe closes.
+///
+/// Each line is bounded at `MAX_LOG_LINE_BYTES`: a longer line is truncated to
+/// that budget, the remainder of the line is discarded, and the line carries a
+/// `…[truncated]` marker, so one pathological writer cannot grow a single
+/// in-memory line without bound.
+fn drain_output<R: Read + Send + 'static>(
+    reader: R,
+    log: Arc<Mutex<RotatingLog>>,
+    tx: Option<Sender<DrainEvent>>,
+    send_urls: bool,
+) {
+    let mut reader = BufReader::new(reader);
+    let mut buf = Vec::with_capacity(256);
+    loop {
+        buf.clear();
+        let mut overlong = false;
+        let mut eof = false;
+        // Assemble one line with a hard byte budget. `fill_buf`/`consume` keeps
+        // `buf` bounded even when the writer never emits a newline.
+        loop {
+            let available = match reader.fill_buf() {
+                Ok(available) => {
+                    if available.is_empty() {
+                        eof = true;
+                        break;
+                    }
+                    available
+                }
+                Err(_) => {
+                    eof = true;
+                    break;
+                }
+            };
+            match available.iter().position(|byte| *byte == b'\n') {
+                Some(newline) => {
+                    if !overlong {
+                        let take = newline.min(MAX_LOG_LINE_BYTES - buf.len());
+                        buf.extend_from_slice(&available[..take]);
+                        overlong = take < newline;
+                    }
+                    reader.consume(newline + 1);
+                    break;
+                }
+                None => {
+                    if !overlong {
+                        let take = available.len().min(MAX_LOG_LINE_BYTES - buf.len());
+                        buf.extend_from_slice(&available[..take]);
+                        overlong = take < available.len();
+                    }
+                    let taken = available.len();
+                    reader.consume(taken);
+                }
+            }
+        }
+        if eof && buf.is_empty() {
+            break;
+        }
+        trim_eol(&mut buf);
+        let mut text = String::from_utf8_lossy(&buf).into_owned();
+        if overlong {
+            text.push_str("…[truncated]");
+        }
+        if let Ok(mut log) = log.lock() {
+            if log.append(text.as_bytes()).is_err() {
+                eprintln!("host log append failed");
+            }
+        }
+        if send_urls && text.starts_with("dsh web: ") {
+            if let Some(tx) = &tx {
+                let _ = tx.send(DrainEvent::Url(text));
+            }
+        }
+        if eof {
+            break;
+        }
+    }
+    if send_urls {
+        if let Some(tx) = tx {
+            let _ = tx.send(DrainEvent::Eof);
+        }
+    }
+}
+
+/// Strip a trailing `\n` and `\r` so a line log is not duplicated by the pipe's
+/// line endings.
+fn trim_eol(line: &mut Vec<u8>) {
+    if line.last() == Some(&b'\n') {
+        line.pop();
+    }
+    if line.last() == Some(&b'\r') {
+        line.pop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_a_plain_ready_url() {
+        assert_eq!(
+            parse_web_url("dsh web: http://127.0.0.1:40000"),
+            Some("http://127.0.0.1:40000".to_string())
+        );
+    }
+
+    #[test]
+    fn parses_a_ready_url_with_a_lan_suffix() {
+        assert_eq!(
+            parse_web_url("dsh web: http://127.0.0.1:3080 (LAN: http://192.168.1.5:3080)"),
+            Some("http://127.0.0.1:3080".to_string())
+        );
+    }
+
+    #[test]
+    fn parses_an_authenticated_ready_url_with_a_token_query() {
+        let url = "http://127.0.0.1:3080/?token=AbC123";
+        assert_eq!(
+            parse_web_url(&format!("dsh web: {url}")),
+            Some(url.to_string())
+        );
+        assert_eq!(web_url_origin(url), "http://127.0.0.1:3080");
+        assert_eq!(web_url_port(url), 3080);
+        assert_eq!(legacy_identity_status(1), None);
+    }
+
+    #[test]
+    fn rejects_non_loopback_or_malformed_ready_lines() {
+        assert_eq!(parse_web_url("dsh web: not-a-url"), None);
+        assert_eq!(parse_web_url("dsh web: http://localhost:3080"), None);
+        assert_eq!(parse_web_url("dsh web: http://127.0.0.1:"), None);
+        assert_eq!(parse_web_url("plain log line: http://127.0.0.1:1"), None);
+        assert_eq!(
+            parse_web_url("dsh web: http://127.0.0.1:3080x"),
+            None
+        );
+    }
+
+    #[test]
+    fn an_env_name_with_a_secret_keyword_is_scrubbed() {
+        assert!(is_secret_name("MY_API_KEY"));
+        assert!(is_secret_name("access_token"));
+        assert!(is_secret_name("DB_PASSWORD"));
+        assert!(is_secret_name("clientSecret"));
+        assert!(!is_secret_name("DSH_HOME"));
+        assert!(!is_secret_name("PATH"));
+    }
+
+    #[test]
+    fn runtime_bin_is_under_the_extraction_root() {
+        let extraction = Path::new(r"C:\Portable\DeepSeek Harness");
+        let paths = DesktopPaths::from_roots(
+            &extraction.join("DeepSeek Harness.exe"),
+            Path::new(r"C:\Users\Ada"),
+            Path::new(r"C:\Users\Ada\AppData\Local"),
+        )
+        .unwrap();
+        // paths.node = <extraction>\node\node.exe, so the CLI resolves under the
+        // same extraction root.
+        assert_eq!(paths.node, extraction.join("node").join("node.exe"));
+        assert_eq!(
+            runtime_bin(&paths),
+            extraction
+                .join("runtime")
+                .join("node_modules")
+                .join("@deepseek-ai")
+                .join("dsh")
+                .join("lib")
+                .join("bin.js")
+        );
+    }
+}
