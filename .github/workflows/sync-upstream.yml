@@ -1,0 +1,107 @@
+name: Sync upstream release
+
+# Bring release/desktop-tauri onto the newest upstream release tag. The branch
+# only adds files and appends rows (see the additive-package Agent Note), so the
+# merge should normally be conflict-free; where upstream and the branch do touch
+# the same lines, the official side wins, which is this branch's stated policy.
+# An unresolvable conflict fails the run and names the files.
+#
+# Registered on the default branch because GitHub only schedules workflows from
+# there; the job checks out the release branch explicitly.
+on:
+  schedule:
+    # 02:00 UTC daily. Upstream publishes several releases a week.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  # CI runs must never report to the production telemetry endpoint.
+  DSH_TELEMETRY_DISABLED: '1'
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  sync:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: release/desktop-tauri
+          fetch-depth: 0
+
+      - name: Resolve the newest upstream release tag
+        id: target
+        shell: pwsh
+        run: |
+          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
+          git fetch --tags --force upstream
+          $tag = git tag --list 'dsh-v*' --sort=-v:refname | Select-Object -First 1
+          if (-not $tag) { throw 'no upstream dsh-v* tag was fetched' }
+          git rev-parse --verify "$tag^{commit}" | Out-Null
+          $branch = "sync/upstream-$tag"
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "branch=$branch" >> $env:GITHUB_OUTPUT
+          Write-Host "newest upstream release tag: $tag"
+
+      - name: Skip when the release is already carried or a pull request is open
+        id: state
+        shell: pwsh
+        run: |
+          git merge-base --is-ancestor "${{ steps.target.outputs.tag }}" HEAD
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "release/desktop-tauri already contains ${{ steps.target.outputs.tag }}"
+            "run=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          $open = gh pr list --repo $env:GITHUB_REPOSITORY `
+            --head "${{ steps.target.outputs.branch }}" --state open --json number --jq 'length'
+          if ([int]$open -gt 0) {
+            Write-Host "pull request for ${{ steps.target.outputs.branch }} is already open"
+            "run=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          "run=true" >> $env:GITHUB_OUTPUT
+
+      - name: Merge the release into a sync branch
+        if: steps.state.outputs.run == 'true'
+        shell: pwsh
+        run: |
+          git config user.name 'dsh-sync'
+          git config user.email 'dsh-sync@users.noreply.github.com'
+          git switch -c "${{ steps.target.outputs.branch }}"
+          # --no-commit keeps the merged result reviewable in the pull request;
+          # -X theirs applies this branch's policy that the official side wins a
+          # textual conflict. Modify/delete conflicts survive that policy, so an
+          # unmerged path list still fails the run below.
+          git merge --no-commit --no-ff -X theirs "${{ steps.target.outputs.tag }}"
+          $code = $LASTEXITCODE
+          $conflicted = @(git diff --name-only --diff-filter=U)
+          if ($conflicted.Count -gt 0) {
+            git merge --abort
+            $conflicted | ForEach-Object { Write-Host "conflict: $_" }
+            throw "unresolvable conflict against ${{ steps.target.outputs.tag }}: $($conflicted -join ', ')"
+          }
+          if ($code -ne 0) { throw "git merge failed with exit code $code" }
+          git commit -m "chore(sync): merge upstream ${{ steps.target.outputs.tag }}"
+          git push -u origin "${{ steps.target.outputs.branch }}"
+
+      - name: Open the synchronization pull request
+        if: steps.state.outputs.run == 'true'
+        shell: pwsh
+        run: |
+          $body = @(
+            "Merges upstream ``${{ steps.target.outputs.tag }}`` into ``release/desktop-tauri``."
+            ''
+            'The branch is additive, so this should need no manual resolution. Where upstream and this'
+            'branch touched the same lines, the official side won the merge: review the Tauri package'
+            'and the pi-ai route overrides in the diff before merging.'
+            ''
+            'After merging, run the Tauri portable build and replace the installed portable.'
+          ) -join "`n"
+          gh pr create --repo $env:GITHUB_REPOSITORY --base release/desktop-tauri `
+            --head "${{ steps.target.outputs.branch }}" `
+            --title "chore(sync): upstream ${{ steps.target.outputs.tag }}" `
+            --body $body
