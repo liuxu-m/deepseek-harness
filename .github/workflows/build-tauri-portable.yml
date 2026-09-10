@@ -1,12 +1,13 @@
 name: Tauri portable build
 
-# Personal portable Windows archive for the latest merged code
-# (release/desktop-tauri-portable). Run manually or on push to the branch.
+# Personal portable Windows archive for the official line this branch tracks
+# (release/desktop-tauri, rebased on the newest upstream tag). Run manually or
+# on push to the branch.
 on:
   workflow_dispatch:
   push:
     branches:
-      - release/desktop-tauri-portable
+      - release/desktop-tauri
 
 permissions:
   contents: read
@@ -35,6 +36,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+
+      - name: Regenerate the runtime deploy manifest
+        run: pnpm run desktop:manifest
 
       - name: Build the Tauri portable archive
         run: pnpm run desktop:build -- --allow-dirty
