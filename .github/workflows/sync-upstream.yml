@@ -1,27 +1,44 @@
 name: Sync upstream release
 
-# Bring release/desktop-tauri onto the newest upstream release tag. The branch
-# only adds files and appends rows (see the additive-package Agent Note), so the
-# merge should normally be conflict-free; where upstream and the branch do touch
-# the same lines, the official side wins, which is this branch's stated policy.
-# An unresolvable conflict fails the run and names the files.
+# 把 release/desktop-tauri 同步到上游"同一条版本线"上的最新发布 tag。
 #
-# Registered on the default branch because GitHub only schedules workflows from
-# there; the job checks out the release branch explicitly.
+# 目标行的判定：读 release 分支根 package.json 的版本号（例如 0.1.5-rc.2），
+# 只在上游 dsh-v0.1.5* 里挑最新 tag。上游的 alpha 线（0.1.6/0.1.7）因此不会被
+# 自动并入；要主动升级版本线时用 workflow_dispatch 指定 tag，合并一次后分支
+# 版本号随之变化，自动挑选会跟着切到新行。
+#
+# 该分支只新增文件、追加行（见 additive-package Agent Note），所以合并通常无冲突；
+# 官方与本地改到同一行时官方优先（-X theirs）。仍有未解决冲突则失败并列出文件。
+#
+# 关于 .github/workflows：GITHUB_TOKEN 是 GitHub App 令牌，永远没有 workflows
+# 权限，只要合并结果改到该目录下的文件，推送就会被拒。两种处理：
+#   1. 已配置仓库密钥 SYNC_TOKEN（fine-grained PAT，本仓库 Contents 与 Workflows
+#      读写、Pull requests 读写）时全自动，包含 workflow 文件；
+#   2. 未配置时把 workflow 文件回退到同步前的版本，并在 PR 正文里列出被跳过的
+#      文件与本地补齐命令，其余内容照常同步。
+#
+# 注册在默认分支上，因为 GitHub 只从默认分支调度 workflow；job 显式检出 release 分支。
 on:
   schedule:
-    # 02:00 UTC daily. Upstream publishes several releases a week.
+    # 每天 02:00 UTC。上游一周发好几个版本。
     - cron: '0 2 * * *'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '强制指定的上游 tag（留空 = 按 release 分支的版本行自动挑选）'
+        required: false
+        type: string
 
 permissions:
   contents: write
   pull-requests: write
 
 env:
-  # CI runs must never report to the production telemetry endpoint.
+  # CI 运行绝不能上报到生产 telemetry 端点。
   DSH_TELEMETRY_DISABLED: '1'
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GH_TOKEN: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+  HAS_SYNC_TOKEN: ${{ secrets.SYNC_TOKEN != '' }}
+  REQUESTED_TAG: ${{ github.event.inputs.tag }}
 
 jobs:
   sync:
@@ -31,77 +48,133 @@ jobs:
         with:
           ref: release/desktop-tauri
           fetch-depth: 0
+          # 推送含 .github/workflows 变更的提交需要 workflows 权限；GITHUB_TOKEN
+          # 拿不到该权限，配置了 SYNC_TOKEN 时改用它。
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
 
-      - name: Resolve the newest upstream release tag
+      - name: Resolve the upstream release tag
         id: target
         shell: pwsh
         run: |
           git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
           git fetch --tags --force upstream
-          $tag = git tag --list 'dsh-v*' --sort=-v:refname | Select-Object -First 1
-          if (-not $tag) { throw 'no upstream dsh-v* tag was fetched' }
+          $tag = $env:REQUESTED_TAG
+          if (-not $tag) {
+            $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+            $line = $version -replace '-.*$', ''
+            $tag = @(git tag --list "dsh-v$line*" --sort=-v:refname) | Select-Object -First 1
+            if (-not $tag) {
+              throw "release/desktop-tauri is at $version but upstream has no dsh-v$line* tag"
+            }
+            Write-Host "release branch version $version -> line $line"
+          }
+          if ($tag -notmatch '^dsh-v[0-9]+\.[0-9]+\.[0-9]+[-.A-Za-z0-9]*$') {
+            throw "refusing to sync unexpected tag name: $tag"
+          }
           git rev-parse --verify "$tag^{commit}" | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "upstream tag $tag is missing after fetch" }
           $branch = "sync/upstream-$tag"
           "tag=$tag" >> $env:GITHUB_OUTPUT
           "branch=$branch" >> $env:GITHUB_OUTPUT
-          Write-Host "newest upstream release tag: $tag"
+          Write-Host "upstream tag to sync: $tag"
 
       - name: Skip when the release is already carried or a pull request is open
         id: state
         shell: pwsh
+        env:
+          TARGET_TAG: ${{ steps.target.outputs.tag }}
+          SYNC_BRANCH: ${{ steps.target.outputs.branch }}
         run: |
-          git merge-base --is-ancestor "${{ steps.target.outputs.tag }}" HEAD
+          git merge-base --is-ancestor $env:TARGET_TAG HEAD
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "release/desktop-tauri already contains ${{ steps.target.outputs.tag }}"
+            Write-Host "release/desktop-tauri already contains $env:TARGET_TAG"
             "run=false" >> $env:GITHUB_OUTPUT
             exit 0
           }
           $open = gh pr list --repo $env:GITHUB_REPOSITORY `
-            --head "${{ steps.target.outputs.branch }}" --state open --json number --jq 'length'
+            --head $env:SYNC_BRANCH --state open --json number --jq 'length'
           if ([int]$open -gt 0) {
-            Write-Host "pull request for ${{ steps.target.outputs.branch }} is already open"
+            Write-Host "pull request for $env:SYNC_BRANCH is already open"
             "run=false" >> $env:GITHUB_OUTPUT
             exit 0
           }
           "run=true" >> $env:GITHUB_OUTPUT
 
       - name: Merge the release into a sync branch
+        id: merge
         if: steps.state.outputs.run == 'true'
         shell: pwsh
+        env:
+          TARGET_TAG: ${{ steps.target.outputs.tag }}
+          SYNC_BRANCH: ${{ steps.target.outputs.branch }}
         run: |
           git config user.name 'dsh-sync'
           git config user.email 'dsh-sync@users.noreply.github.com'
-          git switch -c "${{ steps.target.outputs.branch }}"
-          # --no-commit keeps the merged result reviewable in the pull request;
-          # -X theirs applies this branch's policy that the official side wins a
-          # textual conflict. Modify/delete conflicts survive that policy, so an
-          # unmerged path list still fails the run below.
-          git merge --no-commit --no-ff -X theirs "${{ steps.target.outputs.tag }}"
+          git switch -c $env:SYNC_BRANCH
+          # --no-commit 让合并结果先在 PR 里可审；-X theirs 落实"官方优先"策略。
+          # modify/delete 冲突不受该策略影响，所以下面仍以未合并路径列表判失败。
+          git merge --no-commit --no-ff -X theirs $env:TARGET_TAG
           $code = $LASTEXITCODE
           $conflicted = @(git diff --name-only --diff-filter=U)
           if ($conflicted.Count -gt 0) {
             git merge --abort
             $conflicted | ForEach-Object { Write-Host "conflict: $_" }
-            throw "unresolvable conflict against ${{ steps.target.outputs.tag }}: $($conflicted -join ', ')"
+            throw "unresolvable conflict against ${env:TARGET_TAG}: $($conflicted -join ', ')"
           }
           if ($code -ne 0) { throw "git merge failed with exit code $code" }
-          git commit -m "chore(sync): merge upstream ${{ steps.target.outputs.tag }}"
-          git push -u origin "${{ steps.target.outputs.branch }}"
+
+          # GITHUB_TOKEN 无法修改 .github/workflows 下的文件；未配置 SYNC_TOKEN 时
+          # 把这些文件回退到同步前的版本，并在 PR 正文里列出，由本地补齐。
+          $skipped = @()
+          $wf = @(git diff --cached --name-only -- .github/workflows)
+          if ($wf.Count -gt 0 -and $env:HAS_SYNC_TOKEN -ne 'true') {
+            $skipped = $wf
+            git reset -q HEAD -- .github/workflows
+            git checkout -q HEAD -- .github/workflows
+            git clean -qfd .github/workflows
+            Write-Host "::warning::skipped $($wf.Count) workflow file(s): GITHUB_TOKEN cannot modify .github/workflows"
+          }
+          git commit -m "chore(sync): merge upstream $env:TARGET_TAG"
+
+          # 幂等：分支可能已存在（上一轮失败后重跑），此时用 force-with-lease 覆盖，
+          # 而不是像普通 push 那样被 non-fast-forward 拒掉。
+          git fetch origin $env:SYNC_BRANCH 2>$null
+          git ls-remote --exit-code --heads origin $env:SYNC_BRANCH | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            git push --force-with-lease origin $env:SYNC_BRANCH
+          } else {
+            git push -u origin $env:SYNC_BRANCH
+          }
+          if ($LASTEXITCODE -ne 0) { throw "push failed for $env:SYNC_BRANCH" }
+          "skipped=$($skipped -join ',')" >> $env:GITHUB_OUTPUT
 
       - name: Open the synchronization pull request
         if: steps.state.outputs.run == 'true'
         shell: pwsh
+        env:
+          TARGET_TAG: ${{ steps.target.outputs.tag }}
+          SYNC_BRANCH: ${{ steps.target.outputs.branch }}
+          SKIPPED: ${{ steps.merge.outputs.skipped }}
         run: |
-          $body = @(
-            "Merges upstream ``${{ steps.target.outputs.tag }}`` into ``release/desktop-tauri``."
+          $lines = @(
+            "Merges upstream ``$env:TARGET_TAG`` into ``release/desktop-tauri``."
             ''
             'The branch is additive, so this should need no manual resolution. Where upstream and this'
             'branch touched the same lines, the official side won the merge: review the Tauri package'
             'and the pi-ai route overrides in the diff before merging.'
-            ''
-            'After merging, run the Tauri portable build and replace the installed portable.'
-          ) -join "`n"
+          )
+          if ($env:SKIPPED) {
+            $lines += ''
+            $lines += '**未包含的上游 workflow 文件**（GITHUB_TOKEN 没有 workflows 权限，无法推送）：'
+            foreach ($f in $env:SKIPPED.Split(',')) { $lines += "- ``$f``" }
+            $lines += ''
+            $lines += '本地补齐：``git checkout ' + $env:TARGET_TAG + ' -- .github/workflows`` 后再推送；'
+            $lines += '或在仓库里配置密钥 ``SYNC_TOKEN``（fine-grained PAT，Contents 与 Workflows 读写）后重跑本 workflow。'
+          }
+          $lines += ''
+          $lines += 'After merging, run the Tauri portable build and replace the installed portable.'
+          $body = $lines -join "`n"
           gh pr create --repo $env:GITHUB_REPOSITORY --base release/desktop-tauri `
-            --head "${{ steps.target.outputs.branch }}" `
-            --title "chore(sync): upstream ${{ steps.target.outputs.tag }}" `
+            --head $env:SYNC_BRANCH `
+            --title "chore(sync): upstream $env:TARGET_TAG" `
             --body $body
