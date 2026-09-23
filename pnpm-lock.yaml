@@ -134,19 +134,19 @@ importers:
   apps/cli:
     dependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/cordis
       '@deepseek-ai/cordis-plugin-hmr':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/hmr
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/loader
       '@deepseek-ai/cordis-plugin-timer':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/timer
       '@deepseek-ai/dsh-acp-app':
         specifier: workspace:^
@@ -544,10 +544,10 @@ importers:
   apps/desktop-host:
     dependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/include
       '@deepseek-ai/dsh':
         specifier: workspace:^
@@ -1430,7 +1430,7 @@ importers:
   apps/web:
     devDependencies:
       '@deepseek-ai/cordis-plugin-group':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/group
       '@deepseek-ai/dsh-client-modules':
         specifier: workspace:^
@@ -1511,7 +1511,7 @@ importers:
   benchmarks:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -1637,7 +1637,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -1698,7 +1698,7 @@ importers:
         version: 8.21.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -1735,7 +1735,7 @@ importers:
         version: link:../../util/values
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -1835,7 +1835,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -1962,7 +1962,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
@@ -1993,7 +1993,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-gateway':
         specifier: workspace:^
@@ -2036,7 +2036,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-gateway':
         specifier: workspace:^
@@ -2066,7 +2066,7 @@ importers:
   packages/attachment/attachment:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -2082,7 +2082,7 @@ importers:
         version: 0.35.3(@types/node@22.20.0)
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-attachment':
         specifier: workspace:^
@@ -2107,22 +2107,22 @@ importers:
         version: 2.0.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-group':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/group
       '@deepseek-ai/cordis-plugin-hmr':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/hmr
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/cordis-plugin-timer':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/timer
       '@deepseek-ai/dsh-home-paths':
         specifier: workspace:^
@@ -2143,13 +2143,13 @@ importers:
   packages/boot/cmdline:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       commander:
         specifier: ^15.0.0
@@ -2168,19 +2168,19 @@ importers:
         version: 15.0.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
 
   packages/bundle/base:
     dependencies:
       '@deepseek-ai/cordis-plugin-hmr':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/hmr
       '@deepseek-ai/cordis-plugin-timer':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/timer
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -2430,7 +2430,7 @@ importers:
         version: link:../../workflow/workflow-worker-thread
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/bundle/headless:
@@ -2455,10 +2455,10 @@ importers:
         version: 15.0.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -2495,16 +2495,16 @@ importers:
         version: 15.0.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
 
   packages/bundle/sdk-minimal:
     dependencies:
       '@deepseek-ai/cordis-plugin-timer':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/timer
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -2586,7 +2586,7 @@ importers:
         version: link:../../core/tools
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/bundle/web-app:
@@ -2833,10 +2833,10 @@ importers:
         version: 11.0.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-shell-env':
         specifier: workspace:^
@@ -2858,7 +2858,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
@@ -2907,7 +2907,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -2941,10 +2941,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-client-modules':
         specifier: workspace:^
@@ -2963,7 +2963,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -3002,10 +3002,10 @@ importers:
   packages/client/modules:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
@@ -3020,7 +3020,7 @@ importers:
   packages/client/resources:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-client-store':
         specifier: workspace:^
@@ -3041,7 +3041,7 @@ importers:
   packages/client/store:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       immer:
         specifier: ^10.1.1
@@ -3053,7 +3053,7 @@ importers:
   packages/client/ui-agent-preset:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
@@ -3110,7 +3110,7 @@ importers:
   packages/client/ui-approval:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -3155,7 +3155,7 @@ importers:
   packages/client/ui-attachment:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-attachment':
         specifier: workspace:^
@@ -3200,7 +3200,7 @@ importers:
   packages/client/ui-brand-official:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: workspace:^
@@ -3231,7 +3231,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -3339,7 +3339,7 @@ importers:
   packages/client/ui-commands:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -3400,7 +3400,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -3533,7 +3533,7 @@ importers:
         version: link:../../typert/protocol
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -3614,7 +3614,7 @@ importers:
   packages/client/ui-directory-picker-browse:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -3656,7 +3656,7 @@ importers:
   packages/client/ui-directory-picker-native:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-client-ui-renderer':
         specifier: workspace:^
@@ -3680,7 +3680,7 @@ importers:
   packages/client/ui-dockkit:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -3710,7 +3710,7 @@ importers:
   packages/client/ui-goal:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -3770,7 +3770,7 @@ importers:
   packages/client/ui-input-trigger:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
@@ -3818,7 +3818,7 @@ importers:
   packages/client/ui-jobs:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
@@ -3854,7 +3854,7 @@ importers:
   packages/client/ui-layout:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -3887,7 +3887,7 @@ importers:
   packages/client/ui-message-feedback:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -3956,7 +3956,7 @@ importers:
   packages/client/ui-model-selection:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -4019,7 +4019,7 @@ importers:
   packages/client/ui-open-in-app:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
@@ -4064,7 +4064,7 @@ importers:
   packages/client/ui-permission-presets:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -4115,7 +4115,7 @@ importers:
   packages/client/ui-plan:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -4157,7 +4157,7 @@ importers:
   packages/client/ui-primitives:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@shikijs/langs':
         specifier: ^4.3.1
@@ -4229,7 +4229,7 @@ importers:
   packages/client/ui-reference:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -4271,7 +4271,7 @@ importers:
   packages/client/ui-renderer:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:^
@@ -4304,7 +4304,7 @@ importers:
   packages/client/ui-schedule:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
@@ -4355,7 +4355,7 @@ importers:
   packages/client/ui-session:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
@@ -4382,7 +4382,7 @@ importers:
   packages/client/ui-settings:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -4419,7 +4419,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -4470,7 +4470,7 @@ importers:
   packages/client/ui-settings-models:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -4509,7 +4509,7 @@ importers:
   packages/client/ui-settings-plugin-inventory:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
@@ -4554,7 +4554,7 @@ importers:
   packages/client/ui-settings-plugins:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -4593,7 +4593,7 @@ importers:
   packages/client/ui-sidebar:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-workspace-controller':
         specifier: workspace:^
@@ -4638,7 +4638,7 @@ importers:
   packages/client/ui-sidebar-documentpreview:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-gateway':
         specifier: workspace:^
@@ -4710,7 +4710,7 @@ importers:
   packages/client/ui-sidebar-files:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -4773,7 +4773,7 @@ importers:
   packages/client/ui-sidebar-right:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
@@ -4842,7 +4842,7 @@ importers:
   packages/client/ui-skill:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -4893,7 +4893,7 @@ importers:
   packages/client/ui-slots:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-client-store':
         specifier: workspace:^
@@ -4905,7 +4905,7 @@ importers:
   packages/client/ui-subagent:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
@@ -4966,7 +4966,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -5014,7 +5014,7 @@ importers:
   packages/client/ui-tool:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5098,7 +5098,7 @@ importers:
   packages/client/ui-trajectory:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5170,7 +5170,7 @@ importers:
   packages/client/ui-user-questions:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5233,7 +5233,7 @@ importers:
   packages/client/ui-workflow-run:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
@@ -5284,7 +5284,7 @@ importers:
   packages/client/ui-workspace:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -5353,10 +5353,10 @@ importers:
   packages/client/web:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-client-modules':
         specifier: workspace:^
@@ -5395,7 +5395,7 @@ importers:
   packages/code-runtime/code-runtime:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/code-runtime/code-runtime-worker-thread:
@@ -5408,7 +5408,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-code-runtime':
         specifier: workspace:^
@@ -5423,13 +5423,13 @@ importers:
   packages/compaction/command-compact:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5450,7 +5450,7 @@ importers:
   packages/compaction/compaction:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -5478,13 +5478,13 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5536,13 +5536,13 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-compaction':
         specifier: workspace:^
@@ -5573,10 +5573,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5621,7 +5621,7 @@ importers:
   packages/context/file-reference:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5634,7 +5634,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5665,13 +5665,13 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5738,7 +5738,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5796,7 +5796,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5823,7 +5823,7 @@ importers:
   packages/core/agent:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
@@ -5860,7 +5860,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5888,7 +5888,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5934,7 +5934,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -5958,7 +5958,7 @@ importers:
   packages/core/scope:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
@@ -5977,7 +5977,7 @@ importers:
         version: link:../../util/values
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
@@ -5999,7 +5999,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
@@ -6024,7 +6024,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -6057,7 +6057,7 @@ importers:
   packages/credentials/authorization:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-credentials':
         specifier: workspace:^
@@ -6076,7 +6076,7 @@ importers:
         version: link:../../util/brand
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
@@ -6095,7 +6095,7 @@ importers:
         version: 2.9.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-atomic-write':
         specifier: workspace:^
@@ -6120,7 +6120,7 @@ importers:
         version: 2.29.1
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -6174,7 +6174,7 @@ importers:
   packages/e2b/fs-e2b:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-e2b':
         specifier: workspace:^
@@ -6190,7 +6190,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-e2b':
         specifier: workspace:^
@@ -6215,7 +6215,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -6270,10 +6270,10 @@ importers:
         version: link:../tool-agent-team
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       js-yaml:
         specifier: ^4.2.0
@@ -6286,10 +6286,10 @@ importers:
         version: link:../client-ui-agent-team
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       js-yaml:
         specifier: ^4.2.0
@@ -6302,7 +6302,7 @@ importers:
         version: 18.3.1
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -6357,7 +6357,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-code-runtime':
         specifier: workspace:^
@@ -6388,13 +6388,13 @@ importers:
         version: 8.21.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
@@ -6416,7 +6416,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -6467,7 +6467,7 @@ importers:
   packages/experimental/webworker-packer:
     dependencies:
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/dsh-experimental-webworker-runtime':
         specifier: workspace:^
@@ -6483,7 +6483,7 @@ importers:
         version: 4.0.4
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-package-manifest':
         specifier: workspace:^
@@ -6520,10 +6520,10 @@ importers:
         version: 4.7.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-api-gateway':
         specifier: workspace:^
@@ -6580,10 +6580,10 @@ importers:
   packages/extensions/cordis-client-runner:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -6620,10 +6620,10 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-timer':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/timer
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -6650,10 +6650,10 @@ importers:
   packages/extensions/tool-cordis:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -6680,7 +6680,7 @@ importers:
   packages/extensions/ui-cordis:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
@@ -6732,13 +6732,13 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -6772,13 +6772,13 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -6805,7 +6805,7 @@ importers:
   packages/fs/fs:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -6830,7 +6830,7 @@ importers:
         version: 3.1.1
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-fs':
         specifier: workspace:^
@@ -6842,7 +6842,7 @@ importers:
   packages/fs/fs-observation-policy:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-fs':
         specifier: workspace:^
@@ -6854,7 +6854,7 @@ importers:
   packages/fs/fs-sandbox:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-fs':
         specifier: workspace:^
@@ -6882,7 +6882,7 @@ importers:
         version: 9.0.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -6949,7 +6949,7 @@ importers:
         version: 1.18.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -6992,7 +6992,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7035,7 +7035,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7080,10 +7080,10 @@ importers:
   packages/goal/command-goal:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7120,7 +7120,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7171,7 +7171,7 @@ importers:
   packages/goal/goal-round-driver:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7211,10 +7211,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7251,7 +7251,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7278,7 +7278,7 @@ importers:
   packages/guard/timeout-policy:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
@@ -7293,7 +7293,7 @@ importers:
   packages/hooks/hook-protocol:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
@@ -7312,7 +7312,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7361,7 +7361,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7403,7 +7403,7 @@ importers:
   packages/host/directory-picker:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/host/directory-picker-auto:
@@ -7413,13 +7413,13 @@ importers:
         version: link:../../util/launch-environment
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-client-ui-directory-picker-browse':
         specifier: workspace:^
@@ -7450,7 +7450,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/host/directory-picker-native:
@@ -7466,7 +7466,7 @@ importers:
         version: 3.1.1
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       tsx:
         specifier: ^4.19.2
@@ -7479,10 +7479,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-client-connection':
         specifier: workspace:^
@@ -7510,10 +7510,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
@@ -7526,10 +7526,10 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
@@ -7554,7 +7554,7 @@ importers:
         version: 1.0.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@types/compression':
         specifier: ^1.8.1
@@ -7566,7 +7566,7 @@ importers:
   packages/identity/anonymous-user-id:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -7585,7 +7585,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7622,7 +7622,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-commands':
         specifier: workspace:^
@@ -7655,7 +7655,7 @@ importers:
   packages/interaction/tool-ask-user:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7680,7 +7680,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7707,7 +7707,7 @@ importers:
   packages/interaction/user-questions:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7722,7 +7722,7 @@ importers:
   packages/jobs/jobs:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7744,13 +7744,13 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7781,7 +7781,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7811,7 +7811,7 @@ importers:
   packages/llm/deepseek-llm-api-extensions:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/llm/llm:
@@ -7839,7 +7839,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-attachment':
         specifier: workspace:^
@@ -7864,7 +7864,7 @@ importers:
         version: 3.1.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -7934,7 +7934,7 @@ importers:
         version: 0.85.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-attachment':
         specifier: workspace:^
@@ -7977,13 +7977,13 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8038,13 +8038,13 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8078,7 +8078,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-compaction':
         specifier: workspace:^
@@ -8099,7 +8099,7 @@ importers:
   packages/lsp/lsp:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -8118,7 +8118,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -8161,7 +8161,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8210,7 +8210,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-attachment':
         specifier: workspace:^
@@ -8250,7 +8250,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8299,16 +8299,16 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-group':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/group
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8360,7 +8360,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-scope':
         specifier: workspace:^
@@ -8376,7 +8376,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/sandbox/sandbox:
@@ -8386,7 +8386,7 @@ importers:
         version: link:../../util/values
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
@@ -8411,7 +8411,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
@@ -8433,7 +8433,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8464,7 +8464,7 @@ importers:
         version: 3.1.1
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-pwsh-local':
         specifier: workspace:^
@@ -8480,10 +8480,10 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8529,7 +8529,7 @@ importers:
         version: link:../../../apps/cli
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
@@ -8544,7 +8544,7 @@ importers:
   packages/sdk/protocol:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
@@ -8566,10 +8566,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8624,10 +8624,10 @@ importers:
         version: 0.8.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8684,7 +8684,7 @@ importers:
   packages/session-query/session-query:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -8718,10 +8718,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
@@ -8749,7 +8749,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8797,10 +8797,10 @@ importers:
   packages/session/session-checkpoint-policy:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -8840,7 +8840,7 @@ importers:
         version: link:../../util/values
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/session/session-format-catalog:
@@ -8859,7 +8859,7 @@ importers:
         version: link:../session-format-v2-to-v3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
@@ -8875,7 +8875,7 @@ importers:
         version: link:../../util/values
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
@@ -8897,7 +8897,7 @@ importers:
         version: link:../../util/values
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
@@ -8916,7 +8916,7 @@ importers:
         version: link:../session-format-v1-to-v2
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/session/session-log-deepseek:
@@ -8932,13 +8932,13 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-command-feedback':
         specifier: workspace:^
@@ -8975,7 +8975,7 @@ importers:
         version: link:../../util/values
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -9015,7 +9015,7 @@ importers:
         version: 3.1.1
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
@@ -9034,7 +9034,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
@@ -9053,7 +9053,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
@@ -9078,13 +9078,13 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
@@ -9099,7 +9099,7 @@ importers:
   packages/session/session-telemetry:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -9133,13 +9133,13 @@ importers:
         version: 0.220.0(@opentelemetry/api@1.9.1)
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/cordis-plugin-logger-console':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/logger-console
       '@deepseek-ai/dsh-anonymous-user-id':
         specifier: workspace:^
@@ -9194,7 +9194,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -9228,7 +9228,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent-loop':
         specifier: workspace:^
@@ -9256,13 +9256,13 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent-loop':
         specifier: workspace:^
@@ -9296,7 +9296,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
@@ -9318,13 +9318,13 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
@@ -9346,7 +9346,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -9374,7 +9374,7 @@ importers:
         version: 2.9.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-atomic-write':
         specifier: workspace:^
@@ -9393,7 +9393,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-settings':
         specifier: workspace:^
@@ -9414,7 +9414,7 @@ importers:
   packages/shell/bash-sandbox:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-bash-local':
         specifier: workspace:^
@@ -9448,7 +9448,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-settings':
         specifier: workspace:^
@@ -9469,7 +9469,7 @@ importers:
   packages/shell/pwsh-sandbox:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-pwsh-local':
         specifier: workspace:^
@@ -9496,7 +9496,7 @@ importers:
   packages/shell/shell:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-sandbox':
         specifier: workspace:^
@@ -9515,7 +9515,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -9540,7 +9540,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -9607,13 +9607,13 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -9662,7 +9662,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -9726,13 +9726,13 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -9787,7 +9787,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
@@ -9799,7 +9799,7 @@ importers:
   packages/skill/skill-badge:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-skill':
         specifier: workspace:^
@@ -9818,7 +9818,7 @@ importers:
         version: 2.9.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-fs':
         specifier: workspace:^
@@ -9837,7 +9837,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -9867,7 +9867,7 @@ importers:
   packages/spill/spill:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -9886,13 +9886,13 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
@@ -9914,7 +9914,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -9941,7 +9941,7 @@ importers:
   packages/storage/storage:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/storage/storage-domain:
@@ -9954,7 +9954,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
@@ -9970,7 +9970,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-storage':
         specifier: workspace:^
@@ -9983,7 +9983,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-storage':
         specifier: workspace:^
@@ -10005,7 +10005,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10090,10 +10090,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10157,7 +10157,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10224,10 +10224,10 @@ importers:
         version: 0.153.4
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10285,10 +10285,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10349,10 +10349,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10392,13 +10392,13 @@ importers:
         version: link:../../util/brand
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10453,10 +10453,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10511,10 +10511,10 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10575,7 +10575,7 @@ importers:
         version: link:../../util/values
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10620,7 +10620,7 @@ importers:
   packages/subprocess/subprocess:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-http-proxy':
         specifier: workspace:^
@@ -10642,7 +10642,7 @@ importers:
         version: 1.2.0-beta.15(patch_hash=b40ae545608897914bd25fb009c97eeac478c34e8a910298ddcb01b746534bb0)
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-loader-smoke':
         specifier: workspace:^
@@ -10661,13 +10661,13 @@ importers:
         version: 3.1.1
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/terminal/terminal:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10698,7 +10698,7 @@ importers:
         version: 6.0.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10732,13 +10732,13 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10792,7 +10792,7 @@ importers:
   packages/test-support/agent-loop-testkit:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10829,7 +10829,7 @@ importers:
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(happy-dom@20.11.6)(jsdom@29.1.1(@noble/hashes@2.3.0))(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-api-session-controller':
         specifier: workspace:^
@@ -10892,7 +10892,7 @@ importers:
   packages/test-support/llm-mock-server:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/test-support/llm-replay:
@@ -10905,7 +10905,7 @@ importers:
         version: link:../../util/values
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-compaction':
         specifier: workspace:^
@@ -10930,7 +10930,7 @@ importers:
         version: 4.22.4
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -10973,7 +10973,7 @@ importers:
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(happy-dom@20.11.6)(jsdom@29.1.1(@noble/hashes@2.3.0))(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -11022,13 +11022,13 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -11071,7 +11071,7 @@ importers:
         version: 6.0.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-tool-cordis':
         specifier: workspace:^
@@ -11090,10 +11090,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-typert-registry':
         specifier: workspace:^
@@ -11105,7 +11105,7 @@ importers:
   packages/typert/protocol:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/typert/registry:
@@ -11115,7 +11115,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:^
@@ -11124,13 +11124,13 @@ importers:
   packages/util/atomic-write:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/brand:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/chunked-list:
@@ -11140,25 +11140,25 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/crypto:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/deque:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/home-paths:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/http-proxy:
@@ -11168,7 +11168,7 @@ importers:
         version: 8.10.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
@@ -11177,49 +11177,49 @@ importers:
   packages/util/launch-environment:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/native-command:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/output-retention:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/package-manifest:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/time:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/timeout:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/values:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/util/workspace-path:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
 
   packages/web/tool-web:
@@ -11238,7 +11238,7 @@ importers:
         version: 7.2.4
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -11287,7 +11287,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
@@ -11306,7 +11306,7 @@ importers:
         version: 8.10.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-http-proxy':
         specifier: workspace:^
@@ -11325,7 +11325,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -11359,7 +11359,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-http-proxy':
         specifier: workspace:^
@@ -11378,7 +11378,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-http-proxy':
         specifier: workspace:^
@@ -11400,13 +11400,13 @@ importers:
         version: link:../../util/values
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -11449,13 +11449,13 @@ importers:
         version: 14.2.0
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-credentials':
         specifier: workspace:^
@@ -11477,10 +11477,10 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/loader
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -11529,7 +11529,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -11565,7 +11565,7 @@ importers:
   packages/workflow/workflow:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -11596,7 +11596,7 @@ importers:
         version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-agent':
         specifier: workspace:^
@@ -11651,7 +11651,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
@@ -11675,19 +11675,19 @@ importers:
   python/sdk-runtime:
     dependencies:
       '@deepseek-ai/cordis':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/cordis
       '@deepseek-ai/cordis-plugin-group':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/group
       '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/include
       '@deepseek-ai/cordis-plugin-loader':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/loader
       '@deepseek-ai/cordis-plugin-timer':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../vendor/timer
       '@deepseek-ai/cosmokit':
         specifier: link:../../vendor/cosmokit
