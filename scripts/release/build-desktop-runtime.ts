@@ -85,6 +85,10 @@ export interface PlannedCommand {
  * what makes every workspace dependency resolvable from the flat
  * `node_modules` the bundled Host walks (the same flags the SDK exe build
  * uses). `link-workspace-packages` keeps the closure current-source.
+ * `allow-unused-patches` is required because pnpm fails the deploy when the
+ * workspace's `patchedDependencies` name packages outside the deployed closure;
+ * upstream patches Electron-only packages (spreadsheet and code-signing) that
+ * this Tauri closure never contains.
  * @param input - the repository root and deploy target.
  * @returns The build, verify, and deploy commands in order.
  */
@@ -100,6 +104,7 @@ export function planDesktopRuntime({ stage }: DesktopRuntimePlanInput): PlannedC
         '--config.node-linker=hoisted',
         '--config.auto-install-peers=false',
         '--config.link-workspace-packages=true',
+        '--config.allow-unused-patches=true',
         stage,
       ],
     },

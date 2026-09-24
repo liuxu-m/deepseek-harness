@@ -1,4 +1,4 @@
-﻿/** Deploy plan and post-deploy staged-runtime validation for the desktop closure. */
+/** Deploy plan and post-deploy staged-runtime validation for the desktop closure. */
 
 import { describe, expect, it } from 'vitest'
 import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
@@ -60,6 +60,7 @@ describe('desktop runtime deploy plan', () => {
           '--config.node-linker=hoisted',
           '--config.auto-install-peers=false',
           '--config.link-workspace-packages=true',
+          '--config.allow-unused-patches=true',
           stage,
         ],
       },
