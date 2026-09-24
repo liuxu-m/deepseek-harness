@@ -59,11 +59,11 @@ describe('reasoning schema boundary', () => {
 
 describe('userAgentOverride boundary', () => {
   it('accepts a single-line override and refuses empty or newline values', () => {
-    expect(() => assertServiceable(routeWith({ userAgentOverride: 'codex_cli_rs/0.147.0' })() as Config))
+    expect(() => assertServiceable(routeWith({ userAgentOverride: 'codex_cli_rs/0.147.0' })() as Options))
       .not.toThrow()
-    expect(() => assertServiceable(routeWith({ userAgentOverride: '' })() as Config))
+    expect(() => assertServiceable(routeWith({ userAgentOverride: '' })() as Options))
       .toThrow(/single-line non-empty/)
-    expect(() => assertServiceable(routeWith({ userAgentOverride: 'a\nb' })() as Config))
+    expect(() => assertServiceable(routeWith({ userAgentOverride: 'a\nb' })() as Options))
       .toThrow(/single-line non-empty/)
   })
 })
@@ -71,7 +71,7 @@ describe('userAgentOverride boundary', () => {
 describe('reasoningSummary boundary', () => {
   it('accepts each legal OpenAI Responses summary value', () => {
     for (const value of ['auto', 'detailed', 'concise', null]) {
-      expect(() => assertServiceable(routeWith({ reasoningSummary: value })() as Config)).not.toThrow()
+      expect(() => assertServiceable(routeWith({ reasoningSummary: value })() as Options)).not.toThrow()
     }
   })
 
